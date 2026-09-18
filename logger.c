@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    18.09.2026
- * @version 1.2
+ * @version 1.3
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -46,19 +46,6 @@ typedef struct
 } logger_mark_stats_t;
 
 static logger_mark_stats_t s_mark_stats[LOGGER_MARK_MAX_IDS];
-
-/* ------------------------------------------------------------------------ */
-/*  Служебная таблица кодов самой библиотеки (0x0000-0x00FF)                */
-/* ------------------------------------------------------------------------ */
-
-static const LOGGER_LogEntry_t s_internal_table[] =
-{
-    { LOGGER_INTERNAL_CODE_INIT,  LOGGER_PRIORITY_LOW, "LOGGER: инициализация выполнена" },
-    { LOGGER_INTERNAL_CODE_FLUSH, LOGGER_PRIORITY_LOW, "LOGGER: буфер сброшен в память" },
-    { LOGGER_INTERNAL_CODE_MARK,  LOGGER_PRIORITY_LOW, "LOGGER: временная метка" },
-};
-
-#define LOGGER_INTERNAL_TABLE_SIZE ((uint32_t)(sizeof(s_internal_table) / sizeof(s_internal_table[0])))
 
 /* ------------------------------------------------------------------------ */
 /*  Быстрый вывод в SWO (ITM) - без printf/snprintf                         */
@@ -179,17 +166,18 @@ static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority
  *  code по возрастанию, без повторов и без пересечения со служебным
  *  диапазоном - это проверяет LOGGER_Init(). Коды из служебного диапазона
  *  (0x0000-0x00FF) ищутся отдельно, линейным перебором по короткой
- *  s_internal_table (2-3 записи, быстрее и проще, чем городить общий
- *  отсортированный массив ради нескольких служебных кодов). */
+ *  LOGGER_InternalTable (2-3 записи, см. logger_types.h - быстрее и проще,
+ *  чем городить общий отсортированный массив ради нескольких служебных
+ *  кодов; та же таблица используется и хостовым декодером). */
 static const LOGGER_LogEntry_t *logger_find_entry(uint16_t code)
 {
     if (code <= LOGGER_INTERNAL_CODE_MAX)
     {
         for (uint32_t i = 0U; i < LOGGER_INTERNAL_TABLE_SIZE; i++)
         {
-            if (s_internal_table[i].code == code)
+            if (LOGGER_InternalTable[i].code == code)
             {
-                return &s_internal_table[i];
+                return &LOGGER_InternalTable[i];
             }
         }
         return NULL;
