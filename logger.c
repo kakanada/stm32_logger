@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.4
+ * @version 1.5
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -214,6 +214,25 @@ static const LOGGER_LogEntry_t *logger_find_entry(uint16_t code)
 static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
                          uint8_t persist);
 
+/** Собственно копирует буфер в write_fn и обнуляет счётчики - без каких-либо
+ *  побочных действий (без служебного лога о сбросе). Вызывается только когда
+ *  s_buffering_active != 0, то есть write_fn гарантированно не NULL и буфер
+ *  не пуст (проверяется вызывающей стороной). Отдельная функция нужна, чтобы
+ *  LOGGER_EmergencySave() мог сохранить буфер в память МИНИМАЛЬНЫМ числом
+ *  действий, не тратя время на вывод служебного лога о сбросе (см. её
+ *  комментарий) - на аварийном пути (скорая перезагрузка/потеря питания)
+ *  каждая лишняя операция - это риск не успеть записать данные. */
+static void logger_flush_raw(void)
+{
+    uint16_t flushed_count = s_buffer_count;
+
+    s_config.write_fn(s_config.write_context, (const uint8_t *)s_buffer,
+                       (uint32_t)flushed_count * (uint32_t)sizeof(LOGGER_Record_t));
+
+    s_buffer_count       = 0U;
+    s_max_priority_count = 0U;
+}
+
 /** Сбрасывает накопленный буфер в write_fn (если он задан и буфер не пуст) и
  *  обнуляет счётчики. Вызывается только когда s_buffering_active != 0, то
  *  есть write_fn гарантированно не NULL. После записи логирует служебное
@@ -228,11 +247,7 @@ static void logger_flush_internal(void)
 
     uint16_t flushed_count = s_buffer_count;
 
-    s_config.write_fn(s_config.write_context, (const uint8_t *)s_buffer,
-                       (uint32_t)s_buffer_count * (uint32_t)sizeof(LOGGER_Record_t));
-
-    s_buffer_count       = 0U;
-    s_max_priority_count = 0U;
+    logger_flush_raw();
 
     logger_emit(LOGGER_INTERNAL_CODE_FLUSH, 0U, (int32_t)flushed_count, HAL_GetTick(), 0U);
 }
@@ -467,5 +482,23 @@ HAL_StatusTypeDef LOGGER_Flush(void)
         return HAL_ERROR;
     }
     logger_flush_internal();
+    return HAL_OK;
+}
+
+/* ------------------------------------------------------------------------ */
+/*  Аварийное сохранение (сброс перед потерей питания/перезагрузкой)        */
+/* ------------------------------------------------------------------------ */
+
+HAL_StatusTypeDef LOGGER_EmergencySave(void)
+{
+    if (!s_buffering_active)
+    {
+        return HAL_ERROR;
+    }
+    if (s_buffer_count == 0U)
+    {
+        return HAL_OK;
+    }
+    logger_flush_raw();
     return HAL_OK;
 }

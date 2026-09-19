@@ -12,7 +12,7 @@
  *          - все коды определяет пользователь библиотеки здесь.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.4
+ * @version 1.5
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -177,14 +177,30 @@
 #define LOG_ADDR_LOAD_PWM 0x0DU
 
 /* Смещения (младший байт) - номер события внутри диапазона LOAD_PWM. */
-#define LOG_OFFSET_LOAD_PWM_START        0x00U
-#define LOG_OFFSET_LOAD_PWM_DUTY_CHANGED 0x01U
-#define LOG_OFFSET_LOAD_PWM_OVERLOAD     0x02U
+#define LOG_OFFSET_LOAD_PWM_INIT_BAD_CONFIG    0x00U
+#define LOG_OFFSET_LOAD_PWM_INIT_POOL_FULL     0x01U
+#define LOG_OFFSET_LOAD_PWM_INIT_LED_POOL_FULL 0x02U
+#define LOG_OFFSET_LOAD_PWM_INIT_HAL_START_FAIL 0x03U
+#define LOG_OFFSET_LOAD_PWM_INIT_OK             0x04U
+#define LOG_OFFSET_LOAD_PWM_CYCLE_START         0x05U
+#define LOG_OFFSET_LOAD_PWM_CYCLE_DONE          0x06U
+#define LOG_OFFSET_LOAD_PWM_STOP                0x07U
+#define LOG_OFFSET_LOAD_PWM_STOP_ALL             0x08U
+#define LOG_OFFSET_LOAD_PWM_NULL_HANDLE          0x09U
+#define LOG_OFFSET_LOAD_PWM_GLOBAL_BRIGHTNESS    0x0AU
 
 /* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самой LOAD_PWM. */
-#define LOG_CODE_LOAD_PWM_START        ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_START))
-#define LOG_CODE_LOAD_PWM_DUTY_CHANGED ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_DUTY_CHANGED))
-#define LOG_CODE_LOAD_PWM_OVERLOAD     ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_OVERLOAD))
+#define LOG_CODE_LOAD_PWM_INIT_BAD_CONFIG     ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_INIT_BAD_CONFIG))
+#define LOG_CODE_LOAD_PWM_INIT_POOL_FULL      ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_INIT_POOL_FULL))
+#define LOG_CODE_LOAD_PWM_INIT_LED_POOL_FULL  ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_INIT_LED_POOL_FULL))
+#define LOG_CODE_LOAD_PWM_INIT_HAL_START_FAIL ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_INIT_HAL_START_FAIL))
+#define LOG_CODE_LOAD_PWM_INIT_OK             ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_INIT_OK))
+#define LOG_CODE_LOAD_PWM_CYCLE_START         ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_CYCLE_START))
+#define LOG_CODE_LOAD_PWM_CYCLE_DONE          ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_CYCLE_DONE))
+#define LOG_CODE_LOAD_PWM_STOP                ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_STOP))
+#define LOG_CODE_LOAD_PWM_STOP_ALL            ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_STOP_ALL))
+#define LOG_CODE_LOAD_PWM_NULL_HANDLE         ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_NULL_HANDLE))
+#define LOG_CODE_LOAD_PWM_GLOBAL_BRIGHTNESS   ((uint16_t)((LOG_ADDR_LOAD_PWM << 8) | LOG_OFFSET_LOAD_PWM_GLOBAL_BRIGHTNESS))
 #endif /* LOGGER_ENABLE_LOAD_PWM */
 
 static const LOGGER_LogEntry_t LOGGER_LogTable[] =
@@ -205,9 +221,17 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_LOAD_PWM" до #include "logger_codes.h".     */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_LOAD_PWM
-    { LOG_CODE_LOAD_PWM_START,        LOGGER_PRIORITY_LOW,    "LOAD_PWM: запуск ШИМ" },
-    { LOG_CODE_LOAD_PWM_DUTY_CHANGED, LOGGER_PRIORITY_MEDIUM, "LOAD_PWM: изменение скважности" },
-    { LOG_CODE_LOAD_PWM_OVERLOAD,     LOGGER_PRIORITY_HIGH,   "LOAD_PWM: авария по превышению нагрузки" },
+    { LOG_CODE_LOAD_PWM_INIT_BAD_CONFIG,    LOGGER_PRIORITY_HIGH,   "LOAD_PWM: Init - неверная конфигурация" },
+    { LOG_CODE_LOAD_PWM_INIT_POOL_FULL,     LOGGER_PRIORITY_HIGH,   "LOAD_PWM: Init - пул нагрузок исчерпан" },
+    { LOG_CODE_LOAD_PWM_INIT_LED_POOL_FULL, LOGGER_PRIORITY_HIGH,   "LOAD_PWM: Init - пул LED-таблиц гаммы исчерпан" },
+    { LOG_CODE_LOAD_PWM_INIT_HAL_START_FAIL, LOGGER_PRIORITY_HIGH,  "LOAD_PWM: Init - HAL_TIM_PWM_Start() вернул ошибку" },
+    { LOG_CODE_LOAD_PWM_INIT_OK,             LOGGER_PRIORITY_LOW,   "LOAD_PWM: Init - успешная регистрация нагрузки" },
+    { LOG_CODE_LOAD_PWM_CYCLE_START,         LOGGER_PRIORITY_LOW,   "LOAD_PWM: Start - запуск цикла" },
+    { LOG_CODE_LOAD_PWM_CYCLE_DONE,          LOGGER_PRIORITY_MEDIUM, "LOAD_PWM: Tick - oneshot-цикл завершён" },
+    { LOG_CODE_LOAD_PWM_STOP,                LOGGER_PRIORITY_LOW,   "LOAD_PWM: Stop - остановка одной нагрузки" },
+    { LOG_CODE_LOAD_PWM_STOP_ALL,            LOGGER_PRIORITY_MEDIUM, "LOAD_PWM: StopAll - массовая остановка" },
+    { LOG_CODE_LOAD_PWM_NULL_HANDLE,         LOGGER_PRIORITY_HIGH,  "LOAD_PWM: вызов с h == NULL" },
+    { LOG_CODE_LOAD_PWM_GLOBAL_BRIGHTNESS,   LOGGER_PRIORITY_LOW,   "LOAD_PWM: SetGlobalBrightness - смена яркости" },
 #endif /* LOGGER_ENABLE_LOAD_PWM */
 };
 
