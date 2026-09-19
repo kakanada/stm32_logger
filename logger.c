@@ -3,8 +3,8 @@
  * @file    logger.c
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
- * @date    18.09.2026
- * @version 1.3
+ * @date    19.09.2026
+ * @version 1.4
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
