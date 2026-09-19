@@ -9,7 +9,7 @@
  *          окружений.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.5
+ * @version 1.6
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
