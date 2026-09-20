@@ -4,7 +4,7 @@
  * @brief   Реализация хостового декодера логов (см. log_decoder.h).
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.6
+ * @version 1.7
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -87,6 +87,150 @@ bool LOGDEC_GetPriority(uint16_t code, LOGGER_Priority_t *out_priority)
     }
 
     *out_priority = entry->priority;
+    return true;
+}
+
+/* ------------------------------------------------------------------------ */
+/*  Постфактум-статистика частоты вызовов по разобранному дампу             */
+/* ------------------------------------------------------------------------ */
+
+/** Средняя частота (вызовов/сек) между first_systick и last_systick, либо
+ *  0.0f, если данных недостаточно (call_count < 2 либо интервал нулевой) -
+ *  одно и то же правило для LOGDEC_ComputeCodeStats()/LOGDEC_ComputeMarkStats(). */
+static float logdec_compute_frequency(uint32_t call_count, uint32_t first_systick,
+                                       uint32_t last_systick)
+{
+    if (call_count < 2U)
+    {
+        return 0.0f;
+    }
+
+    uint32_t elapsed_ms = last_systick - first_systick; /* беззнаковая разность - см. logger.c */
+    if (elapsed_ms == 0U)
+    {
+        return 0.0f;
+    }
+
+    return ((float)(call_count - 1U) * 1000.0f) / (float)elapsed_ms;
+}
+
+bool LOGDEC_ComputeCodeStats(const LOGDEC_DecodedRecord_t *records, size_t record_count,
+                              LOGDEC_CodeStats_t *out_stats, size_t out_capacity,
+                              size_t *out_count)
+{
+    if ((records == NULL) || (out_stats == NULL))
+    {
+        return false;
+    }
+
+    size_t distinct_count = 0U;
+
+    for (size_t i = 0U; i < record_count; i++)
+    {
+        uint16_t code = records[i].code;
+
+        if (code == LOGGER_INTERNAL_CODE_MARK)
+        {
+            continue; /* метки агрегируются отдельно по mark_id, см. LOGDEC_ComputeMarkStats() */
+        }
+
+        size_t j;
+        for (j = 0U; j < distinct_count; j++)
+        {
+            if (out_stats[j].code == code)
+            {
+                break;
+            }
+        }
+
+        if (j == distinct_count)
+        {
+            if (distinct_count >= out_capacity)
+            {
+                return false; /* буфер результата слишком мал - "всё или ничего" */
+            }
+            out_stats[j].code          = code;
+            out_stats[j].call_count    = 0U;
+            out_stats[j].first_systick = records[i].systick;
+            out_stats[j].last_systick  = records[i].systick;
+            distinct_count++;
+        }
+
+        out_stats[j].call_count++;
+        out_stats[j].last_systick = records[i].systick;
+    }
+
+    for (size_t j = 0U; j < distinct_count; j++)
+    {
+        out_stats[j].frequency_hz = logdec_compute_frequency(out_stats[j].call_count,
+                                                               out_stats[j].first_systick,
+                                                               out_stats[j].last_systick);
+    }
+
+    if (out_count != NULL)
+    {
+        *out_count = distinct_count;
+    }
+    return true;
+}
+
+bool LOGDEC_ComputeMarkStats(const LOGDEC_DecodedRecord_t *records, size_t record_count,
+                              LOGDEC_MarkStats_t *out_stats, size_t out_capacity,
+                              size_t *out_count)
+{
+    if ((records == NULL) || (out_stats == NULL))
+    {
+        return false;
+    }
+
+    size_t distinct_count = 0U;
+
+    for (size_t i = 0U; i < record_count; i++)
+    {
+        if (records[i].code != LOGGER_INTERNAL_CODE_MARK)
+        {
+            continue;
+        }
+
+        uint16_t mark_id = records[i].source_id;
+
+        size_t j;
+        for (j = 0U; j < distinct_count; j++)
+        {
+            if (out_stats[j].mark_id == mark_id)
+            {
+                break;
+            }
+        }
+
+        if (j == distinct_count)
+        {
+            if (distinct_count >= out_capacity)
+            {
+                return false; /* буфер результата слишком мал - "всё или ничего" */
+            }
+            out_stats[j].mark_id       = mark_id;
+            out_stats[j].call_count    = 0U;
+            out_stats[j].first_systick = records[i].systick;
+            out_stats[j].last_systick  = records[i].systick;
+            distinct_count++;
+        }
+
+        out_stats[j].call_count++;
+        out_stats[j].last_systick = records[i].systick;
+    }
+
+    for (size_t j = 0U; j < distinct_count; j++)
+    {
+        out_stats[j].frequency_hz = logdec_compute_frequency(out_stats[j].call_count,
+                                                               out_stats[j].first_systick,
+                                                               out_stats[j].last_systick);
+    }
+
+    if (out_count != NULL)
+    {
+        *out_count = distinct_count;
+    }
     return true;
 }
 
