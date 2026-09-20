@@ -12,7 +12,7 @@
  *          - все коды определяет пользователь библиотеки здесь.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.6
+ * @version 1.7
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -151,6 +151,26 @@
 
 #include "logger_types.h"
 
+/* ============================================================================
+ *  СПРАВКА - все известные подключаемые зависимые библиотеки этого проекта
+ * ============================================================================
+ *  Каждая - переключатель "#define LOGGER_ENABLE_<ИМЯ>" перед
+ *  "#include \"logger_codes.h\"" в проекте, который реально её использует.
+ *  Если библиотека проекту не нужна - соответствующий define просто не
+ *  ставится, и ни один байт под её коды/записи таблицы не попадает в сборку
+ *  (см. правила интеграции выше). Список ведётся здесь для удобства - чтобы
+ *  видеть все резервирования сразу, без прокрутки всего файла:
+ *
+ *      LOGGER_ENABLE_CANMGR      - can_manager                  (0x41, периферия/CAN)
+ *      LOGGER_ENABLE_LOAD_PWM    - stm32_load_pwm                (0x81, устройство)
+ *      LOGGER_ENABLE_RC_BUS      - rc_bus + rc_bus_telemetry      (0x82, устройство)
+ *      LOGGER_ENABLE_VESC_SERVO  - can_vesc_servo_stm32           (0x83, устройство)
+ *      LOGGER_ENABLE_VESC        - can_vesc_stm32 (motor_vesc)    (0x84, устройство)
+ *      LOGGER_ENABLE_BISS_IRS    - stm32_biss_irs                 (0x85, устройство)
+ *      LOGGER_ENABLE_LSM6DSX     - lsm6dsx (accel+gyro)           (0x86, устройство)
+ * ============================================================================
+ */
+
 /* ---------------------------------------------------------------------- */
 /*  Адресные пространства и коды - и собственных групп проекта (ниже,     */
 /*  без #ifdef - они часть базового примера таблицы), и зависимых         */
@@ -184,13 +204,13 @@
 /*  КАТЕГОРИЯ 2/4 - ПЕРИФЕРИЯ, интерфейсы МК (0x40xx-0x7Fxx)                */
 /* ======================================================================== */
 
-/* ------------------------------------------------------------------ */
-/*  ПРИМЕР - собственная группа проекта (замените на реальную).       */
-/* ------------------------------------------------------------------ */
-/* Адресное пространство группы "SPI". */
-#define LOG_ADDR_SPI 0x40U
-#define LOG_OFFSET_SPI_RETRY 0x01U
-#define LOG_CODE_SPI_RETRY ((uint16_t)((LOG_ADDR_SPI << 8) | LOG_OFFSET_SPI_RETRY))
+/* ПРИМЕР (не компилируется - просто иллюстрация паттерна, см. правила выше):
+ *   #define LOG_ADDR_SPI 0x40U
+ *   #define LOG_OFFSET_SPI_RETRY 0x01U
+ *   #define LOG_CODE_SPI_RETRY ((uint16_t)((LOG_ADDR_SPI << 8) | LOG_OFFSET_SPI_RETRY))
+ * Коды интерфейсов/периферии заводятся здесь ТОЛЬКО когда есть реальная
+ * зависимая библиотека, полностью подтвердившая свой список событий (как
+ * CANMGR ниже) - "заглушек про запас" в этой категории не держим. */
 
 #ifdef LOGGER_ENABLE_CANMGR
 /* Адресное пространство (старший байт кода), выделенное can_manager. */
@@ -217,15 +237,15 @@
 /*  КАТЕГОРИЯ 3/4 - ВНЕШНИЕ УСТРОЙСТВА/ДАТЧИКИ на периферии (0x80xx-0xDFxx) */
 /* ======================================================================== */
 
-/* ------------------------------------------------------------------ */
-/*  ПРИМЕР - собственная группа проекта (замените на реальную).       */
-/* ------------------------------------------------------------------ */
-/* Адресное пространство группы "внешняя память" (например, W25Qxx). */
-#define LOG_ADDR_MEMORY 0x80U
-#define LOG_OFFSET_MEMORY_WRITE_TIMEOUT 0x01U
-#define LOG_OFFSET_MEMORY_CRC_ERROR     0x02U
-#define LOG_CODE_MEMORY_WRITE_TIMEOUT ((uint16_t)((LOG_ADDR_MEMORY << 8) | LOG_OFFSET_MEMORY_WRITE_TIMEOUT))
-#define LOG_CODE_MEMORY_CRC_ERROR     ((uint16_t)((LOG_ADDR_MEMORY << 8) | LOG_OFFSET_MEMORY_CRC_ERROR))
+/* ПРИМЕР (не компилируется - просто иллюстрация паттерна, см. правила выше):
+ *   #define LOG_ADDR_MEMORY 0x80U
+ *   #define LOG_OFFSET_MEMORY_WRITE_TIMEOUT 0x01U
+ *   #define LOG_CODE_MEMORY_WRITE_TIMEOUT ((uint16_t)((LOG_ADDR_MEMORY << 8) | LOG_OFFSET_MEMORY_WRITE_TIMEOUT))
+ * Например, будущая зависимая библиотека внешней флеш-памяти (W25Qxx и т.п.)
+ * получит здесь свой блок под "#ifdef LOGGER_ENABLE_<ИМЯ>" по тому же
+ * образцу, что и LOAD_PWM ниже - ТОЛЬКО после того, как она подтвердит
+ * полный список своих кодов/приоритетов/описаний. Никаких кодов "про
+ * запас" в этой категории не держим. */
 
 #ifdef LOGGER_ENABLE_LOAD_PWM
 /* Адресное пространство (старший байт кода), выделенное LOAD_PWM. */
@@ -380,32 +400,21 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
 
     /* ------------------------------------------------------------------ */
     /*  ПЕРИФЕРИЯ, интерфейсы МК (0x40xx-0x7Fxx).                          */
-    /* ------------------------------------------------------------------ */
-    /*  ПРИМЕР - замените на реальные коды логов своего проекта.          */
-    { LOG_CODE_SPI_RETRY, LOGGER_PRIORITY_LOW, "SPI: повторная попытка передачи" },
-
-    /* ------------------------------------------------------------------ */
     /*  Блок зависимой библиотеки can_manager (CANMGR). Диапазон -         */
     /*  см. LOG_ADDR_CANMGR выше. Включается через                        */
     /*  "#define LOGGER_ENABLE_CANMGR" до #include "logger_codes.h".       */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_CANMGR
     { LOG_CODE_CANMGR_INIT_OK,       LOGGER_PRIORITY_LOW,    "can_manager: Init - шина инициализирована" },
-    { LOG_CODE_CANMGR_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "can_manager: Init - ошибка конфигурации/пула/HAL" },
-    { LOG_CODE_CANMGR_REG_REJECTED,  LOGGER_PRIORITY_MEDIUM, "can_manager: RegisterFilter - регистрация фильтра отклонена" },
-    { LOG_CODE_CANMGR_TX_QUEUE_FULL, LOGGER_PRIORITY_HIGH,   "can_manager: Send/SendLatest - очередь отправки переполнена" },
+    { LOG_CODE_CANMGR_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "can_manager: Init - ошибка конфига/пула/HAL" },
+    { LOG_CODE_CANMGR_REG_REJECTED,  LOGGER_PRIORITY_MEDIUM, "can_manager: фильтр отклонён" },
+    { LOG_CODE_CANMGR_TX_QUEUE_FULL, LOGGER_PRIORITY_HIGH,   "can_manager: очередь отправки полна" },
     { LOG_CODE_CANMGR_RX_OVERFLOW,   LOGGER_PRIORITY_MEDIUM, "can_manager: переполнение Rx FIFO0" },
-    { LOG_CODE_CANMGR_BUS_OFF,       LOGGER_PRIORITY_HIGH,   "can_manager: Bus-Off обнаружен и автовосстановлен" },
+    { LOG_CODE_CANMGR_BUS_OFF,       LOGGER_PRIORITY_HIGH,   "can_manager: Bus-Off, автовосстановлен" },
 #endif /* LOGGER_ENABLE_CANMGR */
 
     /* ------------------------------------------------------------------ */
     /*  ВНЕШНИЕ УСТРОЙСТВА/ДАТЧИКИ на периферии (0x80xx-0xDFxx).           */
-    /* ------------------------------------------------------------------ */
-    /*  ПРИМЕР - замените на реальные коды логов своего проекта.          */
-    { LOG_CODE_MEMORY_WRITE_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "Внешняя память: тайм-аут записи" },
-    { LOG_CODE_MEMORY_CRC_ERROR,     LOGGER_PRIORITY_HIGH,   "Внешняя память: сбой CRC при чтении" },
-
-    /* ------------------------------------------------------------------ */
     /*  Блок зависимой библиотеки LOAD_PWM (stm32_load_pwm). Диапазон -    */
     /*  см. LOG_ADDR_LOAD_PWM выше. Включается через                      */
     /*  "#define LOGGER_ENABLE_LOAD_PWM" до #include "logger_codes.h".     */
@@ -413,9 +422,9 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
 #ifdef LOGGER_ENABLE_LOAD_PWM
     { LOG_CODE_LOAD_PWM_INIT_BAD_CONFIG,    LOGGER_PRIORITY_HIGH,   "LOAD_PWM: Init - неверная конфигурация" },
     { LOG_CODE_LOAD_PWM_INIT_POOL_FULL,     LOGGER_PRIORITY_HIGH,   "LOAD_PWM: Init - пул нагрузок исчерпан" },
-    { LOG_CODE_LOAD_PWM_INIT_LED_POOL_FULL, LOGGER_PRIORITY_HIGH,   "LOAD_PWM: Init - пул LED-таблиц гаммы исчерпан" },
+    { LOG_CODE_LOAD_PWM_INIT_LED_POOL_FULL, LOGGER_PRIORITY_HIGH,   "LOAD_PWM: пул LED-таблиц гаммы исчерпан" },
     { LOG_CODE_LOAD_PWM_INIT_HAL_START_FAIL, LOGGER_PRIORITY_HIGH,  "LOAD_PWM: Init - HAL_TIM_PWM_Start() вернул ошибку" },
-    { LOG_CODE_LOAD_PWM_INIT_OK,             LOGGER_PRIORITY_LOW,   "LOAD_PWM: Init - успешная регистрация нагрузки" },
+    { LOG_CODE_LOAD_PWM_INIT_OK,             LOGGER_PRIORITY_LOW,   "LOAD_PWM: нагрузка зарегистрирована" },
     { LOG_CODE_LOAD_PWM_CYCLE_START,         LOGGER_PRIORITY_LOW,   "LOAD_PWM: Start - запуск цикла" },
     { LOG_CODE_LOAD_PWM_CYCLE_DONE,          LOGGER_PRIORITY_MEDIUM, "LOAD_PWM: Tick - oneshot-цикл завершён" },
     { LOG_CODE_LOAD_PWM_STOP,                LOGGER_PRIORITY_LOW,   "LOAD_PWM: Stop - остановка одной нагрузки" },
@@ -432,10 +441,10 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
 #ifdef LOGGER_ENABLE_RC_BUS
     { LOG_CODE_RC_BUS_INIT_FAIL,              LOGGER_PRIORITY_HIGH,   "rc_bus: Init - конфигурация отклонена" },
     { LOG_CODE_RC_BUS_UART_ERROR,             LOGGER_PRIORITY_MEDIUM, "rc_bus: ошибка приёма на линии каналов" },
-    { LOG_CODE_RC_BUS_FRAME_ERROR,            LOGGER_PRIORITY_LOW,    "rc_bus: битый/нераспознанный кадр каналов" },
-    { LOG_CODE_RC_BUS_TELEMETRY_INIT_FAIL,    LOGGER_PRIORITY_HIGH,   "rc_bus: TelemetryInit - конфигурация отклонена" },
+    { LOG_CODE_RC_BUS_FRAME_ERROR,            LOGGER_PRIORITY_LOW,    "rc_bus: битый кадр каналов" },
+    { LOG_CODE_RC_BUS_TELEMETRY_INIT_FAIL,    LOGGER_PRIORITY_HIGH,   "rc_bus: TelemetryInit отклонён" },
     { LOG_CODE_RC_BUS_TELEMETRY_UART_ERROR,   LOGGER_PRIORITY_MEDIUM, "rc_bus: ошибка приёма на шине датчиков" },
-    { LOG_CODE_RC_BUS_TELEMETRY_FRAME_ERROR,  LOGGER_PRIORITY_LOW,    "rc_bus: битый кадр опроса на шине датчиков" },
+    { LOG_CODE_RC_BUS_TELEMETRY_FRAME_ERROR,  LOGGER_PRIORITY_LOW,    "rc_bus: битый кадр шины датчиков" },
 #endif /* LOGGER_ENABLE_RC_BUS */
 
     /* ------------------------------------------------------------------ */
@@ -447,8 +456,8 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_VESC_SERVO_INIT_BAD_CONFIG, LOGGER_PRIORITY_HIGH, "vesc_servo: Init - конфигурация отклонена" },
     { LOG_CODE_VESC_SERVO_INIT_POOL_FULL,  LOGGER_PRIORITY_HIGH, "vesc_servo: Init - пул серв исчерпан" },
     { LOG_CODE_VESC_SERVO_INIT_VESC_FAIL,  LOGGER_PRIORITY_HIGH, "vesc_servo: Init - VESC_CAN_Init() вернул ошибку" },
-    { LOG_CODE_VESC_SERVO_INIT_DUPLICATE,  LOGGER_PRIORITY_HIGH, "vesc_servo: Init - веска уже обёрнута другой сервой" },
-    { LOG_CODE_VESC_SERVO_INIT_OK,         LOGGER_PRIORITY_LOW,  "vesc_servo: Init - серва успешно зарегистрирована" },
+    { LOG_CODE_VESC_SERVO_INIT_DUPLICATE,  LOGGER_PRIORITY_HIGH, "vesc_servo: веска уже занята сервой" },
+    { LOG_CODE_VESC_SERVO_INIT_OK,         LOGGER_PRIORITY_LOW,  "vesc_servo: серва зарегистрирована" },
     { LOG_CODE_VESC_SERVO_FAULT_ENTERED,   LOGGER_PRIORITY_HIGH, "vesc_servo: переход в FAULT" },
     { LOG_CODE_VESC_SERVO_HOMING_START,    LOGGER_PRIORITY_LOW,  "vesc_servo: StartHoming - хоуминг запущен" },
     { LOG_CODE_VESC_SERVO_HOMING_DONE,     LOGGER_PRIORITY_LOW,  "vesc_servo: хоуминг успешно завершён" },
@@ -461,8 +470,8 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_VESC
     { LOG_CODE_VESC_INIT_OK,       LOGGER_PRIORITY_LOW,    "motor_vesc: Init - веска зарегистрирована" },
-    { LOG_CODE_VESC_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "motor_vesc: Init - неверная конфигурация/пул исчерпан/фильтр отклонён" },
-    { LOG_CODE_VESC_REG_REJECTED,  LOGGER_PRIORITY_MEDIUM, "motor_vesc: RegisterCustomStatus - регистрация отклонена" },
+    { LOG_CODE_VESC_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "motor_vesc: конфиг/пул/фильтр отклонён" },
+    { LOG_CODE_VESC_REG_REJECTED,  LOGGER_PRIORITY_MEDIUM, "motor_vesc: статус отклонён" },
     { LOG_CODE_VESC_EXIST_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "motor_vesc: RequestExists - таймаут ответа PONG" },
 #endif /* LOGGER_ENABLE_VESC */
 
@@ -474,11 +483,11 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
 #ifdef LOGGER_ENABLE_BISS_IRS
     { LOG_CODE_BISS_IRS_INIT_BAD_CONFIG,    LOGGER_PRIORITY_HIGH,   "BISS_IRS: Init - неверная конфигурация" },
     { LOG_CODE_BISS_IRS_INIT_POOL_FULL,     LOGGER_PRIORITY_HIGH,   "BISS_IRS: Init - пул энкодеров исчерпан" },
-    { LOG_CODE_BISS_IRS_INIT_CLOCK_RANGE,   LOGGER_PRIORITY_HIGH,   "BISS_IRS: Init - частота клока недостижима на этом ядре" },
+    { LOG_CODE_BISS_IRS_INIT_CLOCK_RANGE,   LOGGER_PRIORITY_HIGH,   "BISS_IRS: клок недостижим на этом ядре" },
     { LOG_CODE_BISS_IRS_INIT_OK,            LOGGER_PRIORITY_LOW,    "BISS_IRS: Init - энкодер зарегистрирован" },
     { LOG_CODE_BISS_IRS_POLL_ACK_TIMEOUT,   LOGGER_PRIORITY_MEDIUM, "BISS_IRS: Poll - тайм-аут ожидания ACK" },
-    { LOG_CODE_BISS_IRS_POLL_FRAME_INVALID, LOGGER_PRIORITY_MEDIUM, "BISS_IRS: Poll - кадр невалиден (CRC/ERR/WARN/framing)" },
-    { LOG_CODE_BISS_IRS_ZERO_HERE_REJECTED, LOGGER_PRIORITY_LOW,    "BISS_IRS: ZeroHere - нет валидных данных для калибровки" },
+    { LOG_CODE_BISS_IRS_POLL_FRAME_INVALID, LOGGER_PRIORITY_MEDIUM, "BISS_IRS: кадр невалиден (CRC/ERR/WARN)" },
+    { LOG_CODE_BISS_IRS_ZERO_HERE_REJECTED, LOGGER_PRIORITY_LOW,    "BISS_IRS: нет данных для калибровки" },
 #endif /* LOGGER_ENABLE_BISS_IRS */
 
     /* ------------------------------------------------------------------ */
@@ -487,10 +496,10 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_LSM6DSX" до #include "logger_codes.h".      */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_LSM6DSX
-    { LOG_CODE_LSM6DSX_INIT_OK,          LOGGER_PRIORITY_LOW,  "Датчик LSM6DSx успешно инициализирован" },
-    { LOG_CODE_LSM6DSX_INIT_FAIL_WHOAMI, LOGGER_PRIORITY_HIGH, "Ошибка инициализации LSM6DSx: WHO_AM_I не совпал с ожидаемым" },
-    { LOG_CODE_LSM6DSX_BUS_ERROR,        LOGGER_PRIORITY_HIGH, "Ошибка шины SPI/I2C при обращении к LSM6DSx" },
-    { LOG_CODE_LSM6DSX_POOL_EXHAUSTED,   LOGGER_PRIORITY_HIGH, "Пул экземпляров LSM6DSx (LSM6DSX_MAX_DEVICES) исчерпан" },
+    { LOG_CODE_LSM6DSX_INIT_OK,          LOGGER_PRIORITY_LOW,  "LSM6DSx: инициализирован" },
+    { LOG_CODE_LSM6DSX_INIT_FAIL_WHOAMI, LOGGER_PRIORITY_HIGH, "LSM6DSx: WHO_AM_I не совпал" },
+    { LOG_CODE_LSM6DSX_BUS_ERROR,        LOGGER_PRIORITY_HIGH, "LSM6DSx: ошибка шины SPI/I2C" },
+    { LOG_CODE_LSM6DSX_POOL_EXHAUSTED,   LOGGER_PRIORITY_HIGH, "LSM6DSx: пул экземпляров исчерпан" },
 #endif /* LOGGER_ENABLE_LSM6DSX */
 };
 

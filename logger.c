@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.6
+ * @version 1.7
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -30,26 +30,90 @@ static LOGGER_Config_t   s_config;
 static uint8_t           s_buffering_active;
 static uint8_t           s_threshold[LOGGER_PRIORITY_COUNT];
 
-static LOGGER_Record_t   s_buffer[LOGGER_BUFFER_CAPACITY];
+static LOGGER_BUFFER_SECTION_ATTR LOGGER_Record_t s_buffer[LOGGER_BUFFER_CAPACITY];
 static uint16_t          s_buffer_count;
 static LOGGER_Priority_t s_max_priority;
 static uint16_t          s_max_priority_count;
 
-/** Статистика вызовов LOGGER_Mark() на каждый mark_id < LOGGER_MARK_MAX_IDS -
- *  используется только LOGGER_GetMarkFrequency(), сам LOGGER_Mark() не делает
- *  никаких вычислений с плавающей точкой (см. архитектуру в logger.h, п.8). */
+/** Статистика вызовов - на каждый mark_id < LOGGER_MARK_MAX_IDS (см.
+ *  LOGGER_GetMarkFrequency()) и, отдельно, на каждый код из пользовательской
+ *  таблицы (см. s_code_stats/LOGGER_GetCodeFrequency() ниже). Ни
+ *  LOGGER_Mark(), ни LOGGER_Log() не делают вычислений с плавающей точкой на
+ *  горячем пути - только обновляют эти счётчики, деление - по явному запросу
+ *  в LOGGER_Get{Mark,Code}Frequency() (см. архитектуру в logger.h, п.8/9). */
 typedef struct
 {
     uint32_t call_count;
     uint32_t first_systick;
     uint32_t last_systick;
-} logger_mark_stats_t;
+} logger_freq_stats_t;
 
-static logger_mark_stats_t s_mark_stats[LOGGER_MARK_MAX_IDS];
+static logger_freq_stats_t s_mark_stats[LOGGER_MARK_MAX_IDS];
+
+/** Статистика частоты вызова обычных кодов из пользовательской таблицы -
+ *  индекс совпадает с индексом кода в LOGGER_LogTable (logger_codes.h), см.
+ *  logger_find_user_entry_index(). */
+static logger_freq_stats_t s_code_stats[LOGGER_LOG_TABLE_SIZE];
+
+/* ------------------------------------------------------------------------ */
+/*  Более точный источник времени статистики меток (опционально, DWT)       */
+/* ------------------------------------------------------------------------ */
+
+#if LOGGER_MARK_TIME_SOURCE != LOGGER_MARK_TIME_SYSTICK_MS
+/** Сколько тактов ядра (DWT->CYCCNT) приходится на одну единицу измерения
+ *  статистики меток (мс или мкс, см. LOGGER_MARK_TIME_SOURCE) - вычисляется
+ *  один раз в LOGGER_Init() по текущей частоте HCLK. */
+static uint32_t s_mark_dwt_cycles_per_unit = 1U;
+
+/** Включает аппаратный счётчик тактов ядра DWT->CYCCNT и пересчитывает
+ *  делитель для перевода тактов в единицы измерения статистики меток.
+ *  Безопасно вызывать повторно (например, при реинициализации). */
+static void logger_mark_dwt_init(void)
+{
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0U;
+    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+
+    uint32_t hclk_hz = HAL_RCC_GetHCLKFreq();
+#if LOGGER_MARK_TIME_SOURCE == LOGGER_MARK_TIME_DWT_US
+    uint32_t cycles_per_unit = hclk_hz / 1000000U;
+#else
+    uint32_t cycles_per_unit = hclk_hz / 1000U;
+#endif
+    s_mark_dwt_cycles_per_unit = (cycles_per_unit != 0U) ? cycles_per_unit : 1U;
+}
+#endif /* LOGGER_MARK_TIME_SOURCE != LOGGER_MARK_TIME_SYSTICK_MS */
+
+/** Текущее время для статистики LOGGER_Mark()/LOGGER_GetMarkFrequency() в
+ *  единицах, заданных LOGGER_MARK_TIME_SOURCE (мс через SysTick по умолчанию,
+ *  либо мс/мкс через DWT->CYCCNT). НЕ используется для systick, попадающего в
+ *  сами записи логов/буфер - тот всегда HAL_GetTick(). */
+static uint32_t logger_mark_now(void)
+{
+#if LOGGER_MARK_TIME_SOURCE == LOGGER_MARK_TIME_SYSTICK_MS
+    return HAL_GetTick();
+#else
+    return DWT->CYCCNT / s_mark_dwt_cycles_per_unit;
+#endif
+}
+
+/** Множитель для перевода "вызовов за интервал" в "вызовов в секунду" -
+ *  зависит от единицы измерения статистики меток (1000 для мс, 1000000 для
+ *  мкс), см. LOGGER_MARK_TIME_SOURCE. */
+#if LOGGER_MARK_TIME_SOURCE == LOGGER_MARK_TIME_DWT_US
+#define LOGGER_MARK_HZ_NUMERATOR 1000000.0f
+#else
+#define LOGGER_MARK_HZ_NUMERATOR 1000.0f
+#endif
 
 /* ------------------------------------------------------------------------ */
 /*  Быстрый вывод в SWO (ITM) - без printf/snprintf                         */
+/*  Весь этот раздел исключается из сборки, если определён LOGGER_NO_ITM    */
+/*  (ядра без блока ITM - Cortex-M0/M0+, см. "ЧЕСТНЫЕ ОГРАНИЧЕНИЯ" в         */
+/*  logger.h) - на таких ядрах console_fn становится обязательной.          */
 /* ------------------------------------------------------------------------ */
+
+#ifndef LOGGER_NO_ITM
 
 static void logger_swo_putc(char c)
 {
@@ -158,6 +222,8 @@ static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority
     logger_swo_puts("\r\n");
 }
 
+#endif /* !LOGGER_NO_ITM */
+
 /* ------------------------------------------------------------------------ */
 /*  Поиск записи в таблице кодов (двоичный поиск / служебная таблица)      */
 /* ------------------------------------------------------------------------ */
@@ -169,20 +235,25 @@ static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority
  *  LOGGER_InternalTable (2-3 записи, см. logger_types.h - быстрее и проще,
  *  чем городить общий отсортированный массив ради нескольких служебных
  *  кодов; та же таблица используется и хостовым декодером). */
-static const LOGGER_LogEntry_t *logger_find_entry(uint16_t code)
+static const LOGGER_LogEntry_t *logger_find_internal_entry(uint16_t code)
 {
-    if (code <= LOGGER_INTERNAL_CODE_MAX)
+    for (uint32_t i = 0U; i < LOGGER_INTERNAL_TABLE_SIZE; i++)
     {
-        for (uint32_t i = 0U; i < LOGGER_INTERNAL_TABLE_SIZE; i++)
+        if (LOGGER_InternalTable[i].code == code)
         {
-            if (LOGGER_InternalTable[i].code == code)
-            {
-                return &LOGGER_InternalTable[i];
-            }
+            return &LOGGER_InternalTable[i];
         }
-        return NULL;
     }
+    return NULL;
+}
 
+/** Двоичный поиск кода в пользовательской таблице (logger_codes.h) -
+ *  возвращает ИНДЕКС записи (не указатель), чтобы этим же индексом сразу
+ *  обновить статистику частоты кода в s_code_stats (см. logger_emit()).
+ *  code гарантированно > LOGGER_INTERNAL_CODE_MAX у вызывающей стороны.
+ * @retval индекс в LOGGER_LogTable; LOGGER_LOG_TABLE_SIZE, если не найден */
+static uint32_t logger_find_user_entry_index(uint16_t code)
+{
     uint32_t lo = 0U;
     uint32_t hi = LOGGER_LOG_TABLE_SIZE;
 
@@ -193,7 +264,7 @@ static const LOGGER_LogEntry_t *logger_find_entry(uint16_t code)
 
         if (mid_code == code)
         {
-            return &LOGGER_LogTable[mid];
+            return mid;
         }
         if (mid_code < code)
         {
@@ -204,7 +275,7 @@ static const LOGGER_LogEntry_t *logger_find_entry(uint16_t code)
             hi = mid;
         }
     }
-    return NULL;
+    return LOGGER_LOG_TABLE_SIZE; /* не найден */
 }
 
 /* ------------------------------------------------------------------------ */
@@ -291,6 +362,22 @@ static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16
 }
 
 /* ------------------------------------------------------------------------ */
+/*  Общая статистика частоты вызовов (меток и обычных кодов)                */
+/* ------------------------------------------------------------------------ */
+
+/** Обновляет call_count/first_systick/last_systick одной записи статистики -
+ *  общая логика для s_mark_stats (LOGGER_Mark) и s_code_stats (LOGGER_Log). */
+static void logger_freq_stats_bump(logger_freq_stats_t *stats, uint32_t now)
+{
+    if (stats->call_count == 0U)
+    {
+        stats->first_systick = now;
+    }
+    stats->last_systick = now;
+    stats->call_count++;
+}
+
+/* ------------------------------------------------------------------------ */
 /*  Общий внутренний конвейер вывода + (опционально) буферизации            */
 /* ------------------------------------------------------------------------ */
 
@@ -302,7 +389,21 @@ static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16
 static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
                          uint8_t persist)
 {
-    const LOGGER_LogEntry_t *entry = logger_find_entry(code);
+    const LOGGER_LogEntry_t *entry             = NULL;
+    uint32_t                 user_table_index  = LOGGER_LOG_TABLE_SIZE; /* сентинел "не код пользователя" */
+
+    if (code <= LOGGER_INTERNAL_CODE_MAX)
+    {
+        entry = logger_find_internal_entry(code);
+    }
+    else
+    {
+        user_table_index = logger_find_user_entry_index(code);
+        if (user_table_index < LOGGER_LOG_TABLE_SIZE)
+        {
+            entry = &LOGGER_LogTable[user_table_index];
+        }
+    }
 
     LOGGER_Priority_t priority    = (entry != NULL) ? entry->priority    : LOGGER_PRIORITY_HIGH;
     const char       *description = (entry != NULL) ? entry->description : NULL;
@@ -314,14 +415,23 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
         s_config.console_fn(s_config.console_context, code, source_id, priority, value,
                              systick, rtc_time, description);
     }
+#ifndef LOGGER_NO_ITM
     else
     {
         logger_swo_output(code, source_id, priority, value, systick, rtc_time, description);
     }
+#endif
 
     if ((persist != 0U) && s_buffering_active && (entry != NULL))
     {
         logger_buffer_push(entry->code, priority, source_id, value, systick, rtc_time);
+    }
+
+    /* Статистика "болтливости" кода - для ЛЮБОГО известного кода пользователя,
+     * независимо от буферизации (см. LOGGER_GetCodeFrequency() в logger.h). */
+    if (user_table_index < LOGGER_LOG_TABLE_SIZE)
+    {
+        logger_freq_stats_bump(&s_code_stats[user_table_index], systick);
     }
 }
 
@@ -391,6 +501,20 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
         }
     }
 
+#ifdef LOGGER_NO_ITM
+    /* На ядрах без ITM (LOGGER_NO_ITM определён - см. "ЧЕСТНЫЕ ОГРАНИЧЕНИЯ" в
+     * logger.h) вывода по умолчанию не существует вовсе - console_fn
+     * обязательна, иначе логи будут просто молча теряться. */
+    if (config->console_fn == NULL)
+    {
+        return HAL_ERROR;
+    }
+#endif
+
+#if LOGGER_MARK_TIME_SOURCE != LOGGER_MARK_TIME_SYSTICK_MS
+    logger_mark_dwt_init();
+#endif
+
     /* Реинициализация: сначала сбрасываем в память то, что уже накопил
      * предыдущий буфер, и только потом применяем новую конфигурацию. */
     if (s_buffering_active)
@@ -428,18 +552,14 @@ void LOGGER_Log(uint16_t code, uint16_t source_id, int32_t value)
 
 void LOGGER_Mark(uint16_t mark_id)
 {
-    uint32_t now = HAL_GetTick();
+    uint32_t now = HAL_GetTick(); /* попадает в саму запись лога/буфер - всегда мс */
 
     if (mark_id < LOGGER_MARK_MAX_IDS)
     {
-        logger_mark_stats_t *stats = &s_mark_stats[mark_id];
-
-        if (stats->call_count == 0U)
-        {
-            stats->first_systick = now;
-        }
-        stats->last_systick = now;
-        stats->call_count++;
+        /* Статистика частоты метки - в единицах LOGGER_MARK_TIME_SOURCE
+         * (мс через SysTick по умолчанию, либо мс/мкс через DWT), НЕ путать
+         * с 'now' выше, который идёт в саму запись лога. */
+        logger_freq_stats_bump(&s_mark_stats[mark_id], logger_mark_now());
     }
 
     logger_emit(LOGGER_INTERNAL_CODE_MARK, mark_id, (int32_t)mark_id, now, 1U);
@@ -452,7 +572,7 @@ HAL_StatusTypeDef LOGGER_GetMarkFrequency(uint16_t mark_id, float *out_frequency
         return HAL_ERROR;
     }
 
-    const logger_mark_stats_t *stats = &s_mark_stats[mark_id];
+    const logger_freq_stats_t *stats = &s_mark_stats[mark_id];
 
     if (stats->call_count < 2U)
     {
@@ -460,7 +580,41 @@ HAL_StatusTypeDef LOGGER_GetMarkFrequency(uint16_t mark_id, float *out_frequency
     }
 
     /* Беззнаковая разность корректно работает и при однократном переполнении
-     * HAL_GetTick() между первым и последним вызовом метки. */
+     * счётчика (SysTick или DWT->CYCCNT) между первым и последним вызовом. */
+    uint32_t elapsed = stats->last_systick - stats->first_systick;
+    if (elapsed == 0U)
+    {
+        return HAL_ERROR; /* все вызовы попали в один и тот же тик источника времени */
+    }
+
+    *out_frequency = ((float)(stats->call_count - 1U) * LOGGER_MARK_HZ_NUMERATOR) / (float)elapsed;
+    return HAL_OK;
+}
+
+/* ------------------------------------------------------------------------ */
+/*  Статистика частоты обычных кодов ("болтливые" коды логов)               */
+/* ------------------------------------------------------------------------ */
+
+HAL_StatusTypeDef LOGGER_GetCodeFrequency(uint16_t code, float *out_frequency)
+{
+    if (out_frequency == NULL)
+    {
+        return HAL_ERROR;
+    }
+
+    uint32_t idx = logger_find_user_entry_index(code);
+    if (idx >= LOGGER_LOG_TABLE_SIZE)
+    {
+        return HAL_ERROR; /* код не найден в пользовательской таблице */
+    }
+
+    const logger_freq_stats_t *stats = &s_code_stats[idx];
+
+    if (stats->call_count < 2U)
+    {
+        return HAL_ERROR; /* недостаточно вызовов, чтобы иметь интервал для расчёта */
+    }
+
     uint32_t elapsed_ms = stats->last_systick - stats->first_systick;
     if (elapsed_ms == 0U)
     {

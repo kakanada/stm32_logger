@@ -7,7 +7,7 @@
  *          записей, готовых для визуализации.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.6
+ * @version 1.7
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -45,6 +45,19 @@
  *          4. LOGDEC_GetDescription()/LOGDEC_GetPriority() - точечный поиск
  *             по одному коду (например, для построения легенды/фильтра в UI
  *             визуализации без прогона всего дампа).
+ *
+ *          5. LOGDEC_ComputeCodeStats()/LOGDEC_ComputeMarkStats() - постфактум
+ *             статистика частоты вызовов по уже разобранному массиву записей
+ *             (результату LOGDEC_Decode()) - хостовый аналог
+ *             LOGGER_GetCodeFrequency()/LOGGER_GetMarkFrequency() на
+ *             встраиваемой стороне (logger.h), нужен для анализа того, как
+ *             прошивка вела себя за весь период дампа, а не только "на
+ *             текущий момент". LOGDEC_ComputeCodeStats() агрегирует по полю
+ *             code (кроме LOGGER_INTERNAL_CODE_MARK - у него все вызовы делят
+ *             один код, различаясь source_id); LOGDEC_ComputeMarkStats()
+ *             агрегирует именно записи LOGGER_INTERNAL_CODE_MARK по
+ *             source_id (= mark_id). Обе функции, как и LOGDEC_Decode(),
+ *             "всё или ничего" - см. п.3 выше.
  *
  *          === ЧЕСТНЫЕ ОГРАНИЧЕНИЯ ===
  *
@@ -151,6 +164,88 @@ const char *LOGDEC_GetDescription(uint16_t code);
  * @retval false - out_priority == NULL либо код не найден ни в одной таблице
  */
 bool LOGDEC_GetPriority(uint16_t code, LOGGER_Priority_t *out_priority);
+
+/* ------------------------------------------------------------------------ */
+/*  Постфактум-статистика частоты вызовов по разобранному дампу             */
+/* ------------------------------------------------------------------------ */
+
+/** Результат агрегации по одному коду - см. LOGDEC_ComputeCodeStats(). */
+typedef struct
+{
+    uint16_t code;          /**< код лога */
+    uint32_t call_count;    /**< сколько раз встретился в разобранном диапазоне */
+    uint32_t first_systick;  /**< systick первой встреченной записи с этим кодом */
+    uint32_t last_systick;   /**< systick последней встреченной записи с этим кодом */
+
+    /** Средняя частота (вызовов/сек) между первой и последней записью этого
+     *  кода. 0.0f, если call_count < 2 либо first_systick == last_systick
+     *  (недостаточно данных для интервала - см. те же условия у
+     *  LOGGER_GetCodeFrequency() на встраиваемой стороне). */
+    float frequency_hz;
+} LOGDEC_CodeStats_t;
+
+/**
+ * @brief  Считает статистику частоты вызовов по КАЖДОМУ отдельному коду,
+ *         встретившемуся в records (кроме LOGGER_INTERNAL_CODE_MARK - см.
+ *         LOGDEC_ComputeMarkStats() для меток). Хостовый аналог
+ *         LOGGER_GetCodeFrequency() - считается сразу по всему дампу/диапазону
+ *         записей, а не в реальном времени.
+ *
+ *         "Всё или ничего", как и LOGDEC_Decode(): если out_capacity не
+ *         хватает на все различные коды, встретившиеся в records - функция
+ *         возвращает false и НЕ пишет в out_stats.
+ *
+ * @param  records       массив декодированных записей (результат LOGDEC_Decode())
+ * @param  record_count  количество записей в records
+ * @param  out_stats     буфер результата, предоставляется вызывающей стороной
+ * @param  out_capacity  ёмкость out_stats, в элементах
+ * @param  out_count     (опционально, может быть NULL) - сюда записывается
+ *                        фактическое количество различных кодов при успехе
+ * @retval true  - статистика посчитана, out_stats заполнен (в порядке первого
+ *         появления кода в records)
+ * @retval false - records/out_stats == NULL (при record_count > 0), либо
+ *         out_capacity не хватает на все различные коды из records
+ */
+bool LOGDEC_ComputeCodeStats(const LOGDEC_DecodedRecord_t *records, size_t record_count,
+                              LOGDEC_CodeStats_t *out_stats, size_t out_capacity,
+                              size_t *out_count);
+
+/** Результат агрегации по одной метке (mark_id) - см. LOGDEC_ComputeMarkStats(). */
+typedef struct
+{
+    uint16_t mark_id;       /**< идентификатор метки (совпадает с source_id записи) */
+    uint32_t call_count;    /**< сколько раз встретилась в разобранном диапазоне */
+    uint32_t first_systick;  /**< systick первого вызова этой метки */
+    uint32_t last_systick;   /**< systick последнего вызова этой метки */
+
+    /** Средняя частота (вызовов/сек), 0.0f при недостаточных данных - см.
+     *  LOGDEC_CodeStats_t.frequency_hz выше. */
+    float frequency_hz;
+} LOGDEC_MarkStats_t;
+
+/**
+ * @brief  Считает статистику частоты вызовов по КАЖДОЙ отдельной метке
+ *         (LOGGER_Mark(mark_id)) - находит в records все записи с кодом
+ *         LOGGER_INTERNAL_CODE_MARK и агрегирует их по source_id (= mark_id,
+ *         см. LOGGER_Mark() в logger.h). Хостовый аналог
+ *         LOGGER_GetMarkFrequency(), считается сразу по всему дампу/диапазону.
+ *
+ *         "Всё или ничего", как и LOGDEC_ComputeCodeStats().
+ *
+ * @param  records       массив декодированных записей (результат LOGDEC_Decode())
+ * @param  record_count  количество записей в records
+ * @param  out_stats     буфер результата, предоставляется вызывающей стороной
+ * @param  out_capacity  ёмкость out_stats, в элементах
+ * @param  out_count     (опционально, может быть NULL) - сюда записывается
+ *                        фактическое количество различных меток при успехе
+ * @retval true  - статистика посчитана, out_stats заполнен (в порядке первого
+ *         появления mark_id в records)
+ * @retval false - records/out_stats == NULL (при record_count > 0), либо
+ *         out_capacity не хватает на все различные mark_id из records
+ */
+bool LOGDEC_ComputeMarkStats(const LOGDEC_DecodedRecord_t *records, size_t record_count,
+                              LOGDEC_MarkStats_t *out_stats, size_t out_capacity,
+                              size_t *out_count);
 
 #ifdef __cplusplus
 }
