@@ -20,11 +20,10 @@
 /*  Поиск записи в таблице кодов (двоичный поиск / служебная таблица)      */
 /* ------------------------------------------------------------------------ */
 
-/** Та же логика поиска, что и во встраиваемой части (logger.c) - таблица
- *  logger_codes.h гарантированно отсортирована по code по возрастанию, без
- *  повторов и без пересечения со служебным диапазоном (это условие
- *  проверяет LOGGER_Init() на встраиваемой стороне при сборке прошивки,
- *  один и тот же файл logger_codes.h используется на обеих сторонах). */
+/** @brief Поиск записи по коду (служебная таблица линейно, пользовательская -
+ *         двоичным поиском) - та же логика, что во встраиваемой части (logger.c).
+ * @param  code код лога
+ * @return указатель на запись; NULL, если код не найден ни в одной таблице */
 static const LOGGER_LogEntry_t *logdec_find_entry(uint16_t code)
 {
     if (code <= LOGGER_INTERNAL_CODE_MAX)
@@ -67,12 +66,19 @@ static const LOGGER_LogEntry_t *logdec_find_entry(uint16_t code)
 /*  Точечный поиск по коду                                                  */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Возвращает описание кода лога - см. полное описание в log_decoder.h.
+ * @param  code код лога
+ * @return указатель на строку описания; NULL, если код не найден */
 const char *LOGDEC_GetDescription(uint16_t code)
 {
     const LOGGER_LogEntry_t *entry = logdec_find_entry(code);
     return (entry != NULL) ? entry->description : NULL;
 }
 
+/** @brief Возвращает приоритет кода лога - см. полное описание в log_decoder.h.
+ * @param  code         код лога
+ * @param  out_priority куда записать результат
+ * @return true при успехе; false если out_priority == NULL либо код не найден */
 bool LOGDEC_GetPriority(uint16_t code, LOGGER_Priority_t *out_priority)
 {
     if (out_priority == NULL)
@@ -94,9 +100,13 @@ bool LOGDEC_GetPriority(uint16_t code, LOGGER_Priority_t *out_priority)
 /*  Постфактум-статистика частоты вызовов по разобранному дампу             */
 /* ------------------------------------------------------------------------ */
 
-/** Средняя частота (вызовов/сек) между first_systick и last_systick, либо
- *  0.0f, если данных недостаточно (call_count < 2 либо интервал нулевой) -
- *  одно и то же правило для LOGDEC_ComputeCodeStats()/LOGDEC_ComputeMarkStats(). */
+/** @brief Считает среднюю частоту (вызовов/сек) между first_systick и
+ *         last_systick - общее правило для LOGDEC_ComputeCodeStats()/
+ *         LOGDEC_ComputeMarkStats().
+ * @param  call_count    количество вызовов
+ * @param  first_systick systick первого вызова
+ * @param  last_systick  systick последнего вызова
+ * @return частота, Гц; 0.0f, если данных недостаточно */
 static float logdec_compute_frequency(uint32_t call_count, uint32_t first_systick,
                                        uint32_t last_systick)
 {
@@ -114,6 +124,13 @@ static float logdec_compute_frequency(uint32_t call_count, uint32_t first_systic
     return ((float)(call_count - 1U) * 1000.0f) / (float)elapsed_ms;
 }
 
+/** @brief Считает статистику частоты по каждому коду - см. log_decoder.h.
+ * @param  records      массив декодированных записей
+ * @param  record_count количество записей
+ * @param  out_stats    буфер результата
+ * @param  out_capacity ёмкость out_stats
+ * @param  out_count    (опционально) фактическое количество различных кодов
+ * @return true при успехе; false при NULL-аргументах или нехватке out_capacity */
 bool LOGDEC_ComputeCodeStats(const LOGDEC_DecodedRecord_t *records, size_t record_count,
                               LOGDEC_CodeStats_t *out_stats, size_t out_capacity,
                               size_t *out_count)
@@ -174,6 +191,13 @@ bool LOGDEC_ComputeCodeStats(const LOGDEC_DecodedRecord_t *records, size_t recor
     return true;
 }
 
+/** @brief Считает статистику частоты по каждой метке - см. log_decoder.h.
+ * @param  records      массив декодированных записей
+ * @param  record_count количество записей
+ * @param  out_stats    буфер результата
+ * @param  out_capacity ёмкость out_stats
+ * @param  out_count    (опционально) фактическое количество различных меток
+ * @return true при успехе; false при NULL-аргументах или нехватке out_capacity */
 bool LOGDEC_ComputeMarkStats(const LOGDEC_DecodedRecord_t *records, size_t record_count,
                               LOGDEC_MarkStats_t *out_stats, size_t out_capacity,
                               size_t *out_count)
@@ -238,6 +262,13 @@ bool LOGDEC_ComputeMarkStats(const LOGDEC_DecodedRecord_t *records, size_t recor
 /*  Разбор дампа памяти                                                     */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Разбирает сырой дамп памяти в декодированные записи - см. log_decoder.h.
+ * @param  data         сырые байты дампа
+ * @param  data_length  длина data в байтах
+ * @param  out_records  буфер результата
+ * @param  out_capacity ёмкость out_records, в элементах
+ * @param  out_count    (опционально) фактическое количество разобранных записей
+ * @return true при успехе; false при NULL/повреждённом дампе/нехватке out_capacity */
 bool LOGDEC_Decode(const uint8_t *data, size_t data_length,
                     LOGDEC_DecodedRecord_t *out_records, size_t out_capacity,
                     size_t *out_count)

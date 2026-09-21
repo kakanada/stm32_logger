@@ -65,9 +65,8 @@ static logger_freq_stats_t s_code_stats[LOGGER_LOG_TABLE_SIZE];
  *  один раз в LOGGER_Init() по текущей частоте HCLK. */
 static uint32_t s_mark_dwt_cycles_per_unit = 1U;
 
-/** Включает аппаратный счётчик тактов ядра DWT->CYCCNT и пересчитывает
- *  делитель для перевода тактов в единицы измерения статистики меток.
- *  Безопасно вызывать повторно (например, при реинициализации). */
+/** @brief Включает DWT->CYCCNT и пересчитывает делитель тактов в единицы
+ *         измерения статистики меток. Безопасно вызывать повторно. */
 static void logger_mark_dwt_init(void)
 {
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -84,10 +83,9 @@ static void logger_mark_dwt_init(void)
 }
 #endif /* LOGGER_MARK_TIME_SOURCE != LOGGER_MARK_TIME_SYSTICK_MS */
 
-/** Текущее время для статистики LOGGER_Mark()/LOGGER_GetMarkFrequency() в
- *  единицах, заданных LOGGER_MARK_TIME_SOURCE (мс через SysTick по умолчанию,
- *  либо мс/мкс через DWT->CYCCNT). НЕ используется для systick, попадающего в
- *  сами записи логов/буфер - тот всегда HAL_GetTick(). */
+/** @brief Текущее время для статистики меток, в единицах LOGGER_MARK_TIME_SOURCE.
+ *         НЕ используется для systick самих записей лога (тот всегда HAL_GetTick()).
+ * @return время в единицах, заданных LOGGER_MARK_TIME_SOURCE */
 static uint32_t logger_mark_now(void)
 {
 #if LOGGER_MARK_TIME_SOURCE == LOGGER_MARK_TIME_SYSTICK_MS
@@ -115,11 +113,15 @@ static uint32_t logger_mark_now(void)
 
 #ifndef LOGGER_NO_ITM
 
+/** @brief Отправляет один символ в SWO (ITM).
+ * @param  c символ для вывода */
 static void logger_swo_putc(char c)
 {
     (void)ITM_SendChar((uint32_t)c);
 }
 
+/** @brief Отправляет строку в SWO посимвольно.
+ * @param  s строка, завершённая '\0' */
 static void logger_swo_puts(const char *s)
 {
     while (*s != '\0')
@@ -129,7 +131,8 @@ static void logger_swo_puts(const char *s)
     }
 }
 
-/** Печатает 16-битное число в HEX, ровно 4 символа, без ведущего "0x". */
+/** @brief Печатает 16-битное число в HEX, ровно 4 символа, без "0x".
+ * @param  value число для вывода */
 static void logger_swo_put_hex16(uint16_t value)
 {
     static const char hex_digits[] = "0123456789ABCDEF"; /* 17 байт с '\0', не используется как строка */
@@ -146,7 +149,8 @@ static void logger_swo_put_hex16(uint16_t value)
     }
 }
 
-/** Печатает беззнаковое 32-битное число в десятичном виде, без ведущих нулей. */
+/** @brief Печатает беззнаковое 32-битное число в десятичном виде.
+ * @param  value число для вывода */
 static void logger_swo_put_uint32(uint32_t value)
 {
     char buf[10]; /* максимум 10 цифр у 4294967295 */
@@ -174,7 +178,8 @@ static void logger_swo_put_uint32(uint32_t value)
     }
 }
 
-/** Печатает знаковое 32-битное число в десятичном виде. */
+/** @brief Печатает знаковое 32-битное число в десятичном виде.
+ * @param  value число для вывода */
 static void logger_swo_put_int32(int32_t value)
 {
     if (value < 0)
@@ -189,6 +194,9 @@ static void logger_swo_put_int32(int32_t value)
     }
 }
 
+/** @brief Возвращает короткое (4 символа) текстовое имя приоритета для SWO.
+ * @param  priority приоритет лога
+ * @return строка вида "LOW ", "MED ", "HIGH" либо "??? " */
 static const char *logger_priority_name(LOGGER_Priority_t priority)
 {
     switch (priority)
@@ -200,7 +208,14 @@ static const char *logger_priority_name(LOGGER_Priority_t priority)
     }
 }
 
-/** Вывод по умолчанию - используется, если console_fn не задана в LOGGER_Init(). */
+/** @brief Вывод по умолчанию в SWO - используется, если console_fn не задана.
+ * @param  code        код лога
+ * @param  source_id   идентификатор источника события
+ * @param  priority    приоритет кода
+ * @param  value       значение переменной
+ * @param  systick     HAL_GetTick() на момент события
+ * @param  rtc_time    показание RTC на момент события, либо 0
+ * @param  description текстовое описание кода, либо NULL */
 static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority_t priority,
                                int32_t value, uint32_t systick, uint32_t rtc_time,
                                const char *description)
@@ -228,13 +243,10 @@ static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority
 /*  Поиск записи в таблице кодов (двоичный поиск / служебная таблица)      */
 /* ------------------------------------------------------------------------ */
 
-/** Пользовательская таблица (logger_codes.h) гарантированно отсортирована по
- *  code по возрастанию, без повторов и без пересечения со служебным
- *  диапазоном - это проверяет LOGGER_Init(). Коды из служебного диапазона
- *  (0x0000-0x00FF) ищутся отдельно, линейным перебором по короткой
- *  LOGGER_InternalTable (2-3 записи, см. logger_types.h - быстрее и проще,
- *  чем городить общий отсортированный массив ради нескольких служебных
- *  кодов; та же таблица используется и хостовым декодером). */
+/** @brief Линейный поиск кода в служебной таблице LOGGER_InternalTable
+ *         (0x0000-0x00FF).
+ * @param  code код лога
+ * @return указатель на запись; NULL, если код не найден */
 static const LOGGER_LogEntry_t *logger_find_internal_entry(uint16_t code)
 {
     for (uint32_t i = 0U; i < LOGGER_INTERNAL_TABLE_SIZE; i++)
@@ -247,11 +259,11 @@ static const LOGGER_LogEntry_t *logger_find_internal_entry(uint16_t code)
     return NULL;
 }
 
-/** Двоичный поиск кода в пользовательской таблице (logger_codes.h) -
- *  возвращает ИНДЕКС записи (не указатель), чтобы этим же индексом сразу
- *  обновить статистику частоты кода в s_code_stats (см. logger_emit()).
- *  code гарантированно > LOGGER_INTERNAL_CODE_MAX у вызывающей стороны.
- * @retval индекс в LOGGER_LogTable; LOGGER_LOG_TABLE_SIZE, если не найден */
+/** @brief Двоичный поиск кода в пользовательской таблице (logger_codes.h).
+ *         Возвращает индекс (не указатель), чтобы сразу обновить статистику
+ *         в s_code_stats. code гарантированно > LOGGER_INTERNAL_CODE_MAX.
+ * @param  code код лога
+ * @return индекс в LOGGER_LogTable; LOGGER_LOG_TABLE_SIZE, если не найден */
 static uint32_t logger_find_user_entry_index(uint16_t code)
 {
     uint32_t lo = 0U;
@@ -282,17 +294,20 @@ static uint32_t logger_find_user_entry_index(uint16_t code)
 /*  Буферизация                                                             */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Общий конвейер вывода + (опционально) буферизации и статистики -
+ *         см. полный комментарий перед определением ниже.
+ * @param  code      код лога
+ * @param  source_id идентификатор источника события
+ * @param  value     значение переменной
+ * @param  systick   уже захваченный HAL_GetTick()
+ * @param  persist   1 - можно буферизовать (обычные логи); 0 - только вывод
+ *                    (служебные логи о самой библиотеке) */
 static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
                          uint8_t persist);
 
-/** Собственно копирует буфер в write_fn и обнуляет счётчики - без каких-либо
- *  побочных действий (без служебного лога о сбросе). Вызывается только когда
- *  s_buffering_active != 0, то есть write_fn гарантированно не NULL и буфер
- *  не пуст (проверяется вызывающей стороной). Отдельная функция нужна, чтобы
- *  LOGGER_EmergencySave() мог сохранить буфер в память МИНИМАЛЬНЫМ числом
- *  действий, не тратя время на вывод служебного лога о сбросе (см. её
- *  комментарий) - на аварийном пути (скорая перезагрузка/потеря питания)
- *  каждая лишняя операция - это риск не успеть записать данные. */
+/** @brief Копирует буфер в write_fn и обнуляет счётчики, без служебного лога
+ *         о сбросе (нужно для LOGGER_EmergencySave() - минимум действий на
+ *         аварийном пути). Вызывается только при s_buffering_active != 0. */
 static void logger_flush_raw(void)
 {
     uint16_t flushed_count = s_buffer_count;
@@ -304,11 +319,9 @@ static void logger_flush_raw(void)
     s_max_priority_count = 0U;
 }
 
-/** Сбрасывает накопленный буфер в write_fn (если он задан и буфер не пуст) и
- *  обнуляет счётчики. Вызывается только когда s_buffering_active != 0, то
- *  есть write_fn гарантированно не NULL. После записи логирует служебное
- *  событие LOGGER_INTERNAL_CODE_FLUSH - ТОЛЬКО выводом (persist=0), чтобы не
- *  порождать рекурсивный сброс буфера о самом себе. */
+/** @brief Сбрасывает буфер в write_fn (если не пуст) и логирует служебное
+ *         событие LOGGER_INTERNAL_CODE_FLUSH только выводом (persist=0),
+ *         чтобы не порождать рекурсивный сброс буфера о самом себе. */
 static void logger_flush_internal(void)
 {
     if (s_buffer_count == 0U)
@@ -323,8 +336,14 @@ static void logger_flush_internal(void)
     logger_emit(LOGGER_INTERNAL_CODE_FLUSH, 0U, (int32_t)flushed_count, HAL_GetTick(), 0U);
 }
 
-/** Добавляет запись в буфер и, при достижении настроенного порога по текущему
- *  максимальному приоритету буфера, инициирует сброс в память. O(1). */
+/** @brief Добавляет запись в буфер и, при достижении порога по текущему
+ *         максимальному приоритету буфера, инициирует сброс в память. O(1).
+ * @param  code      код лога
+ * @param  priority  приоритет кода
+ * @param  source_id идентификатор источника события
+ * @param  value     значение переменной
+ * @param  systick   HAL_GetTick() на момент события
+ * @param  rtc_time  показание RTC на момент события, либо 0 */
 static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16_t source_id,
                                 int32_t value, uint32_t systick, uint32_t rtc_time)
 {
@@ -365,8 +384,10 @@ static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16
 /*  Общая статистика частоты вызовов (меток и обычных кодов)                */
 /* ------------------------------------------------------------------------ */
 
-/** Обновляет call_count/first_systick/last_systick одной записи статистики -
- *  общая логика для s_mark_stats (LOGGER_Mark) и s_code_stats (LOGGER_Log). */
+/** @brief Обновляет call_count/first_systick/last_systick одной записи
+ *         статистики - общая логика для s_mark_stats и s_code_stats.
+ * @param  stats запись статистики для обновления
+ * @param  now   текущее время (систика/DWT, в зависимости от вызывающей стороны) */
 static void logger_freq_stats_bump(logger_freq_stats_t *stats, uint32_t now)
 {
     if (stats->call_count == 0U)
@@ -381,11 +402,14 @@ static void logger_freq_stats_bump(logger_freq_stats_t *stats, uint32_t now)
 /*  Общий внутренний конвейер вывода + (опционально) буферизации            */
 /* ------------------------------------------------------------------------ */
 
-/** Общая реализация для LOGGER_Log()/LOGGER_Mark()/служебных логов -
- *  принимает уже захваченный systick (чтобы не звать HAL_GetTick() дважды,
- *  когда вызывающая сторона его уже считала - см. LOGGER_Mark()). persist=0
- *  используется только служебными логами про саму библиотеку (INIT/FLUSH),
- *  которые не должны попадать в буфер (см. logger.h, п.6). */
+/** @brief Общая реализация для LOGGER_Log()/LOGGER_Mark()/служебных логов.
+ *         persist=0 используется только служебными логами о самой библиотеке
+ *         (INIT/FLUSH), которые не должны попадать в буфер.
+ * @param  code      код лога
+ * @param  source_id идентификатор источника события
+ * @param  value     значение переменной
+ * @param  systick   уже захваченный HAL_GetTick()
+ * @param  persist   1 - можно буферизовать; 0 - только вывод */
 static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
                          uint8_t persist)
 {
@@ -439,6 +463,9 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
 /*  Инициализация                                                           */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Инициализирует библиотеку - см. полное описание в logger.h.
+ * @param  config конфигурация логгера
+ * @return HAL_OK при успехе; HAL_ERROR при некорректной таблице кодов/config */
 HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
 {
     if (config == NULL)
@@ -541,6 +568,10 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
 /*  Приём лога - главная горячая функция                                    */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Записывает лог - см. полное описание в logger.h.
+ * @param  code      код лога
+ * @param  source_id идентификатор источника события
+ * @param  value     значение переменной */
 void LOGGER_Log(uint16_t code, uint16_t source_id, int32_t value)
 {
     logger_emit(code, source_id, value, HAL_GetTick(), 1U);
@@ -550,6 +581,8 @@ void LOGGER_Log(uint16_t code, uint16_t source_id, int32_t value)
 /*  Временные метки и их частота                                            */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Регистрирует временную метку - см. полное описание в logger.h.
+ * @param  mark_id идентификатор метки */
 void LOGGER_Mark(uint16_t mark_id)
 {
     uint32_t now = HAL_GetTick(); /* попадает в саму запись лога/буфер - всегда мс */
@@ -565,6 +598,10 @@ void LOGGER_Mark(uint16_t mark_id)
     logger_emit(LOGGER_INTERNAL_CODE_MARK, mark_id, (int32_t)mark_id, now, 1U);
 }
 
+/** @brief Возвращает частоту вызовов метки - см. полное описание в logger.h.
+ * @param  mark_id       идентификатор метки
+ * @param  out_frequency куда записать результат (Гц)
+ * @return HAL_OK при успехе; HAL_ERROR при недостаточных данных/неверном mark_id */
 HAL_StatusTypeDef LOGGER_GetMarkFrequency(uint16_t mark_id, float *out_frequency)
 {
     if ((out_frequency == NULL) || (mark_id >= LOGGER_MARK_MAX_IDS))
@@ -595,6 +632,10 @@ HAL_StatusTypeDef LOGGER_GetMarkFrequency(uint16_t mark_id, float *out_frequency
 /*  Статистика частоты обычных кодов ("болтливые" коды логов)               */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Возвращает частоту вызовов кода лога - см. полное описание в logger.h.
+ * @param  code          код лога
+ * @param  out_frequency куда записать результат (Гц)
+ * @return HAL_OK при успехе; HAL_ERROR при недостаточных данных/коде не в таблице */
 HAL_StatusTypeDef LOGGER_GetCodeFrequency(uint16_t code, float *out_frequency)
 {
     if (out_frequency == NULL)
@@ -629,6 +670,8 @@ HAL_StatusTypeDef LOGGER_GetCodeFrequency(uint16_t code, float *out_frequency)
 /*  Принудительный сброс буфера                                             */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Принудительно сбрасывает буфер в память - см. описание в logger.h.
+ * @return HAL_OK при успехе; HAL_ERROR если буферизация не настроена */
 HAL_StatusTypeDef LOGGER_Flush(void)
 {
     if (!s_buffering_active)
@@ -643,6 +686,9 @@ HAL_StatusTypeDef LOGGER_Flush(void)
 /*  Аварийное сохранение (сброс перед потерей питания/перезагрузкой)        */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Аварийное сохранение буфера перед потерей питания - см. logger.h.
+ * @return HAL_OK при успехе (в т.ч. если буфер пуст); HAL_ERROR если
+ *          буферизация не настроена */
 HAL_StatusTypeDef LOGGER_EmergencySave(void)
 {
     if (!s_buffering_active)
