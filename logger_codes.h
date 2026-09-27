@@ -39,6 +39,7 @@
  *  видеть все резервирования сразу, без прокрутки всего файла:
  *
  *      LOGGER_ENABLE_CANMGR      - can_manager                  (0x41, периферия/CAN)
+ *      LOGGER_ENABLE_USB_ETH     - usb_eth                       (0x42, периферия/USB)
  *      LOGGER_ENABLE_LOAD_PWM    - stm32_load_pwm                (0x81, устройство)
  *      LOGGER_ENABLE_RC_BUS      - rc_bus + rc_bus_telemetry      (0x82, устройство)
  *      LOGGER_ENABLE_VESC_SERVO  - can_vesc_servo_stm32           (0x83, устройство)
@@ -109,6 +110,48 @@
 #define LOG_CODE_CANMGR_RX_OVERFLOW   ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_RX_OVERFLOW))
 #define LOG_CODE_CANMGR_BUS_OFF       ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_BUS_OFF))
 #endif /* LOGGER_ENABLE_CANMGR */
+
+#ifdef LOGGER_ENABLE_USB_ETH
+/* Адресное пространство (старший байт кода), выделенное usb_eth (USB
+ * CDC-NCM + lwIP, STM32 как сетевое устройство по USB). */
+#define LOG_ADDR_USB_ETH 0x42U
+
+/* Смещения (младший байт) - номер события внутри диапазона usb_eth. */
+#define LOG_OFFSET_USB_ETH_INIT_OK       0x00U
+#define LOG_OFFSET_USB_ETH_INIT_FAIL     0x01U
+#define LOG_OFFSET_USB_ETH_USB_MOUNTED   0x02U
+#define LOG_OFFSET_USB_ETH_USB_UNMOUNTED 0x03U
+#define LOG_OFFSET_USB_ETH_NET_UP        0x04U
+#define LOG_OFFSET_USB_ETH_NET_DOWN      0x05U
+#define LOG_OFFSET_USB_ETH_DHCP_TIMEOUT  0x06U
+#define LOG_OFFSET_USB_ETH_TCP_ACCEPT    0x07U
+#define LOG_OFFSET_USB_ETH_TCP_CLOSED    0x08U
+#define LOG_OFFSET_USB_ETH_TCP_POOL_FULL 0x09U
+#define LOG_OFFSET_USB_ETH_TCP_ERROR     0x0AU
+#define LOG_OFFSET_USB_ETH_RX_DROP       0x0BU
+#define LOG_OFFSET_USB_ETH_TX_TIMEOUT    0x0CU
+#define LOG_OFFSET_USB_ETH_SEND_NO_MEM   0x0DU
+#define LOG_OFFSET_USB_ETH_LISTEN_FAIL   0x0EU
+#define LOG_OFFSET_USB_ETH_UDP_BIND_FAIL 0x0FU
+
+/* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом usb_eth. */
+#define LOG_CODE_USB_ETH_INIT_OK       ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_INIT_OK))
+#define LOG_CODE_USB_ETH_INIT_FAIL     ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_INIT_FAIL))
+#define LOG_CODE_USB_ETH_USB_MOUNTED   ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_USB_MOUNTED))
+#define LOG_CODE_USB_ETH_USB_UNMOUNTED ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_USB_UNMOUNTED))
+#define LOG_CODE_USB_ETH_NET_UP        ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_NET_UP))
+#define LOG_CODE_USB_ETH_NET_DOWN      ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_NET_DOWN))
+#define LOG_CODE_USB_ETH_DHCP_TIMEOUT  ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_DHCP_TIMEOUT))
+#define LOG_CODE_USB_ETH_TCP_ACCEPT    ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TCP_ACCEPT))
+#define LOG_CODE_USB_ETH_TCP_CLOSED    ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TCP_CLOSED))
+#define LOG_CODE_USB_ETH_TCP_POOL_FULL ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TCP_POOL_FULL))
+#define LOG_CODE_USB_ETH_TCP_ERROR     ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TCP_ERROR))
+#define LOG_CODE_USB_ETH_RX_DROP       ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_RX_DROP))
+#define LOG_CODE_USB_ETH_TX_TIMEOUT    ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TX_TIMEOUT))
+#define LOG_CODE_USB_ETH_SEND_NO_MEM   ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_SEND_NO_MEM))
+#define LOG_CODE_USB_ETH_LISTEN_FAIL   ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_LISTEN_FAIL))
+#define LOG_CODE_USB_ETH_UDP_BIND_FAIL ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_UDP_BIND_FAIL))
+#endif /* LOGGER_ENABLE_USB_ETH */
 
 /* ======================================================================== */
 /*  КАТЕГОРИЯ 3/4 - ВНЕШНИЕ УСТРОЙСТВА/ДАТЧИКИ на периферии (0x80xx-0xDFxx) */
@@ -289,6 +332,30 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_CANMGR_RX_OVERFLOW,   LOGGER_PRIORITY_MEDIUM, "can_manager: переполнение Rx FIFO0" },
     { LOG_CODE_CANMGR_BUS_OFF,       LOGGER_PRIORITY_HIGH,   "can_manager: Bus-Off, автовосстановлен" },
 #endif /* LOGGER_ENABLE_CANMGR */
+
+    /* ------------------------------------------------------------------ */
+    /*  Блок зависимой библиотеки usb_eth (USB CDC-NCM + lwIP). Диапазон - */
+    /*  см. LOG_ADDR_USB_ETH выше. Включается через                       */
+    /*  "#define LOGGER_ENABLE_USB_ETH" до #include "logger_codes.h".     */
+    /* ------------------------------------------------------------------ */
+#ifdef LOGGER_ENABLE_USB_ETH
+    { LOG_CODE_USB_ETH_INIT_OK,       LOGGER_PRIORITY_LOW,    "USB_ETH: инициализация выполнена" },
+    { LOG_CODE_USB_ETH_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "USB_ETH: ошибка инициализации" },
+    { LOG_CODE_USB_ETH_USB_MOUNTED,   LOGGER_PRIORITY_LOW,    "USB_ETH: USB подключён к хосту" },
+    { LOG_CODE_USB_ETH_USB_UNMOUNTED, LOGGER_PRIORITY_MEDIUM, "USB_ETH: USB отключён от хоста" },
+    { LOG_CODE_USB_ETH_NET_UP,        LOGGER_PRIORITY_LOW,    "USB_ETH: сеть готова, IP назначен" },
+    { LOG_CODE_USB_ETH_NET_DOWN,      LOGGER_PRIORITY_MEDIUM, "USB_ETH: сеть потеряна" },
+    { LOG_CODE_USB_ETH_DHCP_TIMEOUT,  LOGGER_PRIORITY_MEDIUM, "USB_ETH: DHCP-клиент не получил адрес" },
+    { LOG_CODE_USB_ETH_TCP_ACCEPT,    LOGGER_PRIORITY_LOW,    "USB_ETH: TCP-клиент подключился" },
+    { LOG_CODE_USB_ETH_TCP_CLOSED,    LOGGER_PRIORITY_LOW,    "USB_ETH: TCP-соединение закрыто" },
+    { LOG_CODE_USB_ETH_TCP_POOL_FULL, LOGGER_PRIORITY_HIGH,   "USB_ETH: нет свободных слотов TCP, отказ" },
+    { LOG_CODE_USB_ETH_TCP_ERROR,     LOGGER_PRIORITY_MEDIUM, "USB_ETH: TCP-соединение сброшено/ошибка" },
+    { LOG_CODE_USB_ETH_RX_DROP,       LOGGER_PRIORITY_MEDIUM, "USB_ETH: входящий кадр отброшен (нет памяти)" },
+    { LOG_CODE_USB_ETH_TX_TIMEOUT,    LOGGER_PRIORITY_MEDIUM, "USB_ETH: таймаут передачи по USB, кадр отброшен" },
+    { LOG_CODE_USB_ETH_SEND_NO_MEM,   LOGGER_PRIORITY_MEDIUM, "USB_ETH: нет памяти lwIP для отправки" },
+    { LOG_CODE_USB_ETH_LISTEN_FAIL,   LOGGER_PRIORITY_HIGH,   "USB_ETH: не удалось открыть TCP-порт" },
+    { LOG_CODE_USB_ETH_UDP_BIND_FAIL, LOGGER_PRIORITY_HIGH,   "USB_ETH: не удалось открыть UDP-порт" },
+#endif /* LOGGER_ENABLE_USB_ETH */
 
     /* ------------------------------------------------------------------ */
     /*  ВНЕШНИЕ УСТРОЙСТВА/ДАТЧИКИ на периферии (0x80xx-0xDFxx).           */
