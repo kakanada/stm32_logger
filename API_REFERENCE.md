@@ -126,6 +126,7 @@ typedef uint32_t (*LOGGER_RtcTimeFn_t)(void *context);
 | `0x0001` | `LOGGER_INTERNAL_CODE_INIT` | успешное завершение `LOGGER_Init()`; `value` = размер пользовательской таблицы кодов | нет - только вывод |
 | `0x0002` | `LOGGER_INTERNAL_CODE_FLUSH` | буфер сброшен в `write_fn`; `value` = количество записей в сбросе | нет - только вывод (иначе рекурсия) |
 | `0x0003` | `LOGGER_INTERNAL_CODE_MARK` | вызвана `LOGGER_Mark()` | да - как обычный лог |
+| `0x0004` | `LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW` | буфер физически полон (см. "Честные ограничения" в README) - запись отброшена; `value` = отброшенный код | нет - только вывод |
 
 ---
 

@@ -4,8 +4,8 @@
  * @brief   Встраиваемая (клиентская) часть библиотеки логирования для STM32.
  *          Полное описание архитектуры и API - см. README.md/API_REFERENCE.md.
  * @author  Mechanic
- * @date    19.09.2026
- * @version 1.7
+ * @date    29.09.2026
+ * @version 1.8
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия

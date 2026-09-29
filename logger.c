@@ -3,8 +3,8 @@
  * @file    logger.c
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
- * @date    19.09.2026
- * @version 1.7
+ * @date    29.09.2026
+ * @version 1.8
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -15,6 +15,7 @@
 #include "logger.h"
 #include "logger_codes.h"
 #include <stddef.h>
+#include <string.h>
 
 /* ------------------------------------------------------------------------ */
 /*  Состояние модуля (статика, без malloc)                                  */
@@ -291,6 +292,33 @@ static uint32_t logger_find_user_entry_index(uint16_t code)
 }
 
 /* ------------------------------------------------------------------------ */
+/*  Короткая критическая секция (PRIMASK) - защищает s_buffer/s_buffer_count */
+/*  и s_max_priority(_count) от гонки при конкурентных вызовах              */
+/*  LOGGER_Log()/LOGGER_Mark() из ISR и main без синхронизации на стороне   */
+/*  вызывающего (см. README, "Честные ограничения"). Save/restore PRIMASK,  */
+/*  а не безусловный __enable_irq() - корректно и при вложенном вызове из   */
+/*  уже замаскированного контекста. Сам write_fn (может быть медленным -    */
+/*  запись в flash и т.п.) ВСЕГДА вызывается вне критической секции - см.   */
+/*  logger_flush_raw().                                                     */
+/* ------------------------------------------------------------------------ */
+
+/** @brief Входит в критическую секцию - сохраняет PRIMASK и отключает прерывания.
+ * @return предыдущее значение PRIMASK, передать в logger_critical_exit() */
+static uint32_t logger_critical_enter(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    return primask;
+}
+
+/** @brief Выходит из критической секции, восстанавливая PRIMASK.
+ * @param  primask значение, полученное от logger_critical_enter() */
+static void logger_critical_exit(uint32_t primask)
+{
+    __set_PRIMASK(primask);
+}
+
+/* ------------------------------------------------------------------------ */
 /*  Буферизация                                                             */
 /* ------------------------------------------------------------------------ */
 
@@ -305,18 +333,45 @@ static uint32_t logger_find_user_entry_index(uint16_t code)
 static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
                          uint8_t persist);
 
-/** @brief Копирует буфер в write_fn и обнуляет счётчики, без служебного лога
- *         о сбросе (нужно для LOGGER_EmergencySave() - минимум действий на
- *         аварийном пути). Вызывается только при s_buffering_active != 0. */
-static void logger_flush_raw(void)
+/** @brief Копирует уже накопленные записи буфера в write_fn и "срезает"
+ *         только сброшенный хвост (а не весь буфер) - записи, добавленные
+ *         конкурентно ПОКА идёт write_fn (I/O вне критической секции, может
+ *         занять заметное время), остаются в буфере, а не пропадают и не
+ *         читаются наполовину. Снимок count/трим - под критической секцией,
+ *         сам вызов write_fn - нет. Без служебного лога о сбросе (нужно для
+ *         LOGGER_EmergencySave() - минимум действий на аварийном пути).
+ *         Вызывается только при s_buffering_active != 0.
+ * @return фактическое количество отправленных в write_fn записей */
+static uint16_t logger_flush_raw(void)
 {
+    uint32_t primask       = logger_critical_enter();
     uint16_t flushed_count = s_buffer_count;
+    logger_critical_exit(primask);
+
+    if (flushed_count == 0U)
+    {
+        return 0U;
+    }
 
     s_config.write_fn(s_config.write_context, (const uint8_t *)s_buffer,
                        (uint32_t)flushed_count * (uint32_t)sizeof(LOGGER_Record_t));
 
-    s_buffer_count       = 0U;
+    primask = logger_critical_enter();
+    if (s_buffer_count > flushed_count)
+    {
+        /* За время write_fn добавились новые записи (индексы >= flushed_count,
+         * см. logger_buffer_push) - сдвигаем их в начало, не теряем. */
+        memmove(&s_buffer[0], &s_buffer[flushed_count],
+                (size_t)(s_buffer_count - flushed_count) * sizeof(LOGGER_Record_t));
+    }
+    s_buffer_count = (uint16_t)(s_buffer_count - flushed_count);
+    /* Приоритет оставшегося хвоста не пересчитывается - следующий порог по
+     * нему наберётся заново (см. README, "Честные ограничения"): в редком
+     * случае это лишь чуть отложит следующий сброс, не теряет данные. */
     s_max_priority_count = 0U;
+    logger_critical_exit(primask);
+
+    return flushed_count;
 }
 
 /** @brief Сбрасывает буфер в write_fn (если не пуст) и логирует служебное
@@ -329,15 +384,20 @@ static void logger_flush_internal(void)
         return;
     }
 
-    uint16_t flushed_count = s_buffer_count;
-
-    logger_flush_raw();
+    uint16_t flushed_count = logger_flush_raw();
+    if (flushed_count == 0U)
+    {
+        return;
+    }
 
     logger_emit(LOGGER_INTERNAL_CODE_FLUSH, 0U, (int32_t)flushed_count, HAL_GetTick(), 0U);
 }
 
 /** @brief Добавляет запись в буфер и, при достижении порога по текущему
  *         максимальному приоритету буфера, инициирует сброс в память. O(1).
+ *         Резервирование места (индекс/счётчики) - под короткой критической
+ *         секцией (см. logger_critical_enter()), сам flush (I/O) - вне её,
+ *         чтобы конкурентный вызов из ISR не ждал длительный write_fn.
  * @param  code      код лога
  * @param  priority  приоритет кода
  * @param  source_id идентификатор источника события
@@ -347,20 +407,27 @@ static void logger_flush_internal(void)
 static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16_t source_id,
                                 int32_t value, uint32_t systick, uint32_t rtc_time)
 {
+    uint32_t primask = logger_critical_enter();
+
     if (s_buffer_count >= (uint16_t)LOGGER_BUFFER_CAPACITY)
     {
         /* Физическая защита буфера - не должна срабатывать при корректно
          * настроенных порогах (см. LOGGER_Init), но не даёт выйти за границы
-         * массива при любых обстоятельствах. */
-        logger_flush_internal();
+         * массива. Запись отбрасывается (не зовём flush из критической
+         * секции - это I/O), но событие подсвечивается служебным логом. */
+        logger_critical_exit(primask);
+        logger_emit(LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, 0U, (int32_t)code, systick, 0U);
+        return;
     }
 
-    s_buffer[s_buffer_count].code      = code;
-    s_buffer[s_buffer_count].source_id = source_id;
-    s_buffer[s_buffer_count].value     = value;
-    s_buffer[s_buffer_count].systick   = systick;
-    s_buffer[s_buffer_count].rtc_time  = rtc_time;
-    s_buffer_count++;
+    uint16_t index = s_buffer_count;
+
+    s_buffer[index].code      = code;
+    s_buffer[index].source_id = source_id;
+    s_buffer[index].value     = value;
+    s_buffer[index].systick   = systick;
+    s_buffer[index].rtc_time  = rtc_time;
+    s_buffer_count            = (uint16_t)(index + 1U);
 
     if ((s_max_priority_count == 0U) || (priority > s_max_priority))
     {
@@ -374,7 +441,11 @@ static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16
     /* priority < s_max_priority: запись заняла место в буфере, но не
      * учитывается в счётчике триггера сброса - см. архитектуру в logger.h */
 
-    if (s_max_priority_count >= s_threshold[s_max_priority])
+    uint8_t need_flush = (s_max_priority_count >= s_threshold[s_max_priority]) ? 1U : 0U;
+
+    logger_critical_exit(primask);
+
+    if (need_flush != 0U)
     {
         logger_flush_internal();
     }

@@ -4,8 +4,8 @@
  * @brief   Портируемые типы формата лога и служебная таблица кодов самой
  *          библиотеки - общая часть встраиваемой и хостовой сторон.
  * @author  Mechanic
- * @date    19.09.2026
- * @version 1.7
+ * @date    29.09.2026
+ * @version 1.8
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -93,9 +93,10 @@ typedef struct
 #define LOGGER_INTERNAL_CODE_MIN 0x0000U
 #define LOGGER_INTERNAL_CODE_MAX 0x00FFU
 
-#define LOGGER_INTERNAL_CODE_INIT  0x0001U /**< LOGGER_Init() успешно завершена */
-#define LOGGER_INTERNAL_CODE_FLUSH 0x0002U /**< буфер сброшен в write_fn */
-#define LOGGER_INTERNAL_CODE_MARK  0x0003U /**< вызвана LOGGER_Mark() */
+#define LOGGER_INTERNAL_CODE_INIT             0x0001U /**< LOGGER_Init() успешно завершена */
+#define LOGGER_INTERNAL_CODE_FLUSH            0x0002U /**< буфер сброшен в write_fn */
+#define LOGGER_INTERNAL_CODE_MARK             0x0003U /**< вызвана LOGGER_Mark() */
+#define LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW  0x0004U /**< буфер физически полон, запись отброшена (см. README) */
 
 /** Таблица служебных кодов библиотеки - используется и встраиваемой стороной
  *  (logger.c, для поиска приоритета/описания кодов 0x0000-0x00FF), и
@@ -105,9 +106,10 @@ typedef struct
  *  конфликту символов на этапе линковки. */
 static const LOGGER_LogEntry_t LOGGER_InternalTable[] =
 {
-    { LOGGER_INTERNAL_CODE_INIT,  LOGGER_PRIORITY_LOW, "LOGGER: инициализация выполнена" },
-    { LOGGER_INTERNAL_CODE_FLUSH, LOGGER_PRIORITY_LOW, "LOGGER: буфер сброшен в память" },
-    { LOGGER_INTERNAL_CODE_MARK,  LOGGER_PRIORITY_LOW, "LOGGER: временная метка" },
+    { LOGGER_INTERNAL_CODE_INIT,            LOGGER_PRIORITY_LOW,  "LOGGER: инициализация выполнена" },
+    { LOGGER_INTERNAL_CODE_FLUSH,           LOGGER_PRIORITY_LOW,  "LOGGER: буфер сброшен в память" },
+    { LOGGER_INTERNAL_CODE_MARK,            LOGGER_PRIORITY_LOW,  "LOGGER: временная метка" },
+    { LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, LOGGER_PRIORITY_HIGH, "LOGGER: буфер полон, запись отброшена" },
 };
 
 /** Количество записей в LOGGER_InternalTable. */
