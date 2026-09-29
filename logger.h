@@ -5,7 +5,7 @@
  *          Полное описание архитектуры и API - см. README.md/API_REFERENCE.md.
  * @author  Mechanic
  * @date    29.09.2026
- * @version 1.8
+ * @version 1.8.1
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия

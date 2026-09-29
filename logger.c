@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    29.09.2026
- * @version 1.8
+ * @version 1.8.1
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -33,6 +33,11 @@ static uint8_t           s_threshold[LOGGER_PRIORITY_COUNT];
 
 static LOGGER_BUFFER_SECTION_ATTR LOGGER_Record_t s_buffer[LOGGER_BUFFER_CAPACITY];
 static uint16_t          s_buffer_count;
+/** Флаг "сброс уже идёт" - делает logger_flush_raw() эксклюзивным между
+ *  конкурентными вызовами (см. комментарий перед функцией: без этого флага
+ *  два одновременных сброса из разных контекстов вычитают flushed_count из
+ *  s_buffer_count дважды - второе вычитание уводит счётчик в underflow. */
+static uint8_t           s_flush_in_progress;
 static LOGGER_Priority_t s_max_priority;
 static uint16_t          s_max_priority_count;
 
@@ -338,20 +343,44 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
  *         конкурентно ПОКА идёт write_fn (I/O вне критической секции, может
  *         занять заметное время), остаются в буфере, а не пропадают и не
  *         читаются наполовину. Снимок count/трим - под критической секцией,
- *         сам вызов write_fn - нет. Без служебного лога о сбросе (нужно для
- *         LOGGER_EmergencySave() - минимум действий на аварийном пути).
- *         Вызывается только при s_buffering_active != 0.
- * @return фактическое количество отправленных в write_fn записей */
+ *         сам вызов write_fn - нет. Эксклюзивность между конкурентными
+ *         сбросами обеспечивает s_flush_in_progress: если сброс уже идёт в
+ *         другом контексте, этот вызов сразу возвращает 0 - без этого два
+ *         конкурентных сброса вычли бы flushed_count из s_buffer_count по
+ *         разу каждый, уводя счётчик в underflow (найдено тестом test_library
+ *         на v1.8, см. историю). Вычитание дополнительно защищено от
+ *         underflow на случай прочих гонок - самовосстановление вместо
+ *         необратимого зависания движка логов. Без служебного лога о сбросе
+ *         (нужно для LOGGER_EmergencySave() - минимум действий на аварийном
+ *         пути). Вызывается только при s_buffering_active != 0.
+ * @return фактическое количество отправленных в write_fn записей; 0, если
+ *          буфер пуст либо сброс уже шёл в другом контексте */
 static uint16_t logger_flush_raw(void)
 {
-    uint32_t primask       = logger_critical_enter();
-    uint16_t flushed_count = s_buffer_count;
-    logger_critical_exit(primask);
+    uint32_t primask = logger_critical_enter();
 
-    if (flushed_count == 0U)
+    if (s_buffer_count > (uint16_t)LOGGER_BUFFER_CAPACITY)
     {
+        /* Самовосстановление: в нормальном режиме такого быть не может (см.
+         * защиту от underflow ниже и в logger_buffer_push), но если счётчик
+         * всё же оказался повреждён - не читаем write_fn за границей
+         * s_buffer, отбрасываем накопленное и продолжаем работу, а не
+         * зависаем/не читаем чужую память. */
+        s_buffer_count       = 0U;
+        s_max_priority_count = 0U;
+        logger_critical_exit(primask);
         return 0U;
     }
+
+    if ((s_flush_in_progress != 0U) || (s_buffer_count == 0U))
+    {
+        logger_critical_exit(primask);
+        return 0U;
+    }
+
+    s_flush_in_progress   = 1U;
+    uint16_t flushed_count = s_buffer_count;
+    logger_critical_exit(primask);
 
     s_config.write_fn(s_config.write_context, (const uint8_t *)s_buffer,
                        (uint32_t)flushed_count * (uint32_t)sizeof(LOGGER_Record_t));
@@ -363,12 +392,21 @@ static uint16_t logger_flush_raw(void)
          * см. logger_buffer_push) - сдвигаем их в начало, не теряем. */
         memmove(&s_buffer[0], &s_buffer[flushed_count],
                 (size_t)(s_buffer_count - flushed_count) * sizeof(LOGGER_Record_t));
+        s_buffer_count = (uint16_t)(s_buffer_count - flushed_count);
     }
-    s_buffer_count = (uint16_t)(s_buffer_count - flushed_count);
+    else
+    {
+        /* s_buffer_count <= flushed_count всегда должно выполняться (сброс
+         * эксклюзивен - никто больше не мог уменьшить счётчик) - явная
+         * защита от underflow вместо безусловного вычитания на случай
+         * будущих изменений конкурентной модели. */
+        s_buffer_count = 0U;
+    }
     /* Приоритет оставшегося хвоста не пересчитывается - следующий порог по
      * нему наберётся заново (см. README, "Честные ограничения"): в редком
      * случае это лишь чуть отложит следующий сброс, не теряет данные. */
     s_max_priority_count = 0U;
+    s_flush_in_progress  = 0U;
     logger_critical_exit(primask);
 
     return flushed_count;
@@ -414,9 +452,15 @@ static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16
         /* Физическая защита буфера - не должна срабатывать при корректно
          * настроенных порогах (см. LOGGER_Init), но не даёт выйти за границы
          * массива. Запись отбрасывается (не зовём flush из критической
-         * секции - это I/O), но событие подсвечивается служебным логом. */
+         * секции - это I/O), но событие подсвечивается служебным логом.
+         * Дальше пробуем flush - и если буфер действительно просто полон
+         * (например, write_fn был занят чужим сбросом), он его разгрузит;
+         * и если счётчик был повреждён (см. logger_flush_raw), он же
+         * самовосстановится - без этого вызова логгер молчал бы до
+         * LOGGER_Flush()/перезагрузки (см. историю v1.8 -> v1.8.1). */
         logger_critical_exit(primask);
         logger_emit(LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, 0U, (int32_t)code, systick, 0U);
+        logger_flush_internal();
         return;
     }
 
