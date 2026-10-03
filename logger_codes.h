@@ -101,6 +101,7 @@
 #define LOG_OFFSET_CANMGR_TX_QUEUE_FULL 0x03U
 #define LOG_OFFSET_CANMGR_RX_OVERFLOW   0x04U
 #define LOG_OFFSET_CANMGR_BUS_OFF       0x05U
+#define LOG_OFFSET_CANMGR_NO_AUTORETRANS 0x06U
 
 /* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом can_manager. */
 #define LOG_CODE_CANMGR_INIT_OK       ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_INIT_OK))
@@ -109,6 +110,7 @@
 #define LOG_CODE_CANMGR_TX_QUEUE_FULL ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_TX_QUEUE_FULL))
 #define LOG_CODE_CANMGR_RX_OVERFLOW   ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_RX_OVERFLOW))
 #define LOG_CODE_CANMGR_BUS_OFF       ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_BUS_OFF))
+#define LOG_CODE_CANMGR_NO_AUTORETRANS ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_NO_AUTORETRANS))
 #endif /* LOGGER_ENABLE_CANMGR */
 
 #ifdef LOGGER_ENABLE_USB_ETH
@@ -331,6 +333,7 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_CANMGR_TX_QUEUE_FULL, LOGGER_PRIORITY_HIGH,   "can_manager: очередь отправки полна" },
     { LOG_CODE_CANMGR_RX_OVERFLOW,   LOGGER_PRIORITY_MEDIUM, "can_manager: переполнение Rx FIFO0" },
     { LOG_CODE_CANMGR_BUS_OFF,       LOGGER_PRIORITY_HIGH,   "can_manager: Bus-Off, автовосстановлен" },
+    { LOG_CODE_CANMGR_NO_AUTORETRANS, LOGGER_PRIORITY_MEDIUM, "can_manager: AutoRetransmission отключен (DAR/NART)" },
 #endif /* LOGGER_ENABLE_CANMGR */
 
     /* ------------------------------------------------------------------ */
