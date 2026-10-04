@@ -4,8 +4,8 @@
  * @brief   Портируемые типы формата лога и служебная таблица кодов самой
  *          библиотеки - общая часть встраиваемой и хостовой сторон.
  * @author  Mechanic
- * @date    29.09.2026
- * @version 1.8
+ * @date    04.10.2026
+ * @version 1.9
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -97,6 +97,19 @@ typedef struct
 #define LOGGER_INTERNAL_CODE_FLUSH            0x0002U /**< буфер сброшен в write_fn */
 #define LOGGER_INTERNAL_CODE_MARK             0x0003U /**< вызвана LOGGER_Mark() */
 #define LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW  0x0004U /**< буфер физически полон, запись отброшена (см. README) */
+#define LOGGER_INTERNAL_CODE_INIT_FAIL        0x0005U /**< LOGGER_Init() отклонена: source_id = код проблемной записи таблицы (0, если не относится к записи), value = LOGGER_INIT_FAIL_* */
+
+/** Причины отказа LOGGER_Init() - передаются в value служебного лога
+ *  LOGGER_INTERNAL_CODE_INIT_FAIL (выводится только в console_fn/SWO). */
+#define LOGGER_INIT_FAIL_CONFIG_NULL        1 /**< config == NULL */
+#define LOGGER_INIT_FAIL_TABLE_EMPTY        2 /**< пользовательская таблица пуста */
+#define LOGGER_INIT_FAIL_CODE_RESERVED      3 /**< код из служебного диапазона 0x0000-0x00FF */
+#define LOGGER_INIT_FAIL_BAD_PRIORITY       4 /**< некорректный приоритет записи */
+#define LOGGER_INIT_FAIL_DESC_NULL          5 /**< description == NULL */
+#define LOGGER_INIT_FAIL_DESC_TOO_LONG      6 /**< описание длиннее LOGGER_MAX_DESCRIPTION_LENGTH байт */
+#define LOGGER_INIT_FAIL_NOT_SORTED         7 /**< таблица не отсортирована либо повтор кода */
+#define LOGGER_INIT_FAIL_BAD_THRESHOLD      8 /**< порог 0 либо больше LOGGER_BUFFER_CAPACITY */
+#define LOGGER_INIT_FAIL_CONSOLE_REQUIRED   9 /**< LOGGER_NO_ITM без console_fn */
 
 /** Таблица служебных кодов библиотеки - используется и встраиваемой стороной
  *  (logger.c, для поиска приоритета/описания кодов 0x0000-0x00FF), и
@@ -110,6 +123,7 @@ static const LOGGER_LogEntry_t LOGGER_InternalTable[] =
     { LOGGER_INTERNAL_CODE_FLUSH,           LOGGER_PRIORITY_LOW,  "LOGGER: буфер сброшен в память" },
     { LOGGER_INTERNAL_CODE_MARK,            LOGGER_PRIORITY_LOW,  "LOGGER: временная метка" },
     { LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, LOGGER_PRIORITY_HIGH, "LOGGER: буфер полон, запись отброшена" },
+    { LOGGER_INTERNAL_CODE_INIT_FAIL,       LOGGER_PRIORITY_HIGH, "LOGGER: Init отклонён, см. src/val" },
 };
 
 /** Количество записей в LOGGER_InternalTable. */

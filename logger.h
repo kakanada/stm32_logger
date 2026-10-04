@@ -4,8 +4,8 @@
  * @brief   Встраиваемая (клиентская) часть библиотеки логирования для STM32.
  *          Полное описание архитектуры и API - см. README.md/API_REFERENCE.md.
  * @author  Mechanic
- * @date    29.09.2026
- * @version 1.8.1
+ * @date    04.10.2026
+ * @version 1.9
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -21,6 +21,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stddef.h>
 #include "main.h"          /* CubeMX: HAL_StatusTypeDef, HAL_GetTick() */
 #include "logger_types.h"  /* портируемые типы, общие с хостовым декодером */
 
@@ -197,6 +198,11 @@ typedef struct
  *         накопленный буфер (если ранее была включена буферизация и в нём
  *         есть записи), затем применяет новую конфигурацию.
  *
+ *         При отказе причина выводится служебным логом
+ *         LOGGER_INTERNAL_CODE_INIT_FAIL (только вывод, через console_fn из
+ *         переданного config, либо SWO): source_id = код проблемной записи
+ *         таблицы (0, если причина не в записи), value = LOGGER_INIT_FAIL_*.
+ *
  * @param  config  заполненная конфигурация
  * @retval HAL_OK; HAL_ERROR - config == NULL, таблица кодов пуста/не
  *         отсортирована/содержит повтор кода/код из служебного диапазона/
@@ -205,6 +211,32 @@ typedef struct
  *         LOGGER_BUFFER_CAPACITY
  */
 HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config);
+
+/**
+ * @brief  Формирует текстовую строку лога в буфер - в том же формате, что
+ *         вывод по умолчанию в SWO, без printf/snprintf:
+ *         "[LOG] 0x.... src=0x.... [LOW ] val=... t=...ms rtc=... : описание\r\n".
+ *         Предназначена для console_fn, чтобы любой приёмник (COM, UART, TCP)
+ *         выдавал единый читаемый текст без ручного форматирования. Работает
+ *         и при LOGGER_NO_ITM. Результат всегда завершён '\0' (если size > 0)
+ *         и обрезается по size; семантика возвращаемого значения - как у
+ *         snprintf.
+ *
+ * @param  buf         буфер результата (может быть NULL при size == 0 -
+ *                      тогда только подсчёт длины)
+ * @param  size        размер buf в байтах
+ * @param  code        код лога (аргументы - те же, что получает console_fn)
+ * @param  source_id   идентификатор источника события
+ * @param  priority    приоритет кода
+ * @param  value       значение переменной
+ * @param  systick     HAL_GetTick() на момент события
+ * @param  rtc_time    показание RTC на момент события, либо 0
+ * @param  description текстовое описание кода, либо NULL (выводится "???")
+ * @return длина полной строки без '\0'; если >= size - строка обрезана
+ */
+size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
+                                 LOGGER_Priority_t priority, int32_t value, uint32_t systick,
+                                 uint32_t rtc_time, const char *description);
 
 /* ------------------------------------------------------------------------ */
 /*  Приём лога - главная горячая функция                                    */

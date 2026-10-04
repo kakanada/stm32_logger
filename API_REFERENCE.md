@@ -127,6 +127,7 @@ typedef uint32_t (*LOGGER_RtcTimeFn_t)(void *context);
 | `0x0002` | `LOGGER_INTERNAL_CODE_FLUSH` | буфер сброшен в `write_fn`; `value` = количество записей в сбросе | нет - только вывод (иначе рекурсия) |
 | `0x0003` | `LOGGER_INTERNAL_CODE_MARK` | вызвана `LOGGER_Mark()` | да - как обычный лог |
 | `0x0004` | `LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW` | буфер физически полон (см. "Честные ограничения" в README) - запись отброшена; `value` = отброшенный код | нет - только вывод |
+| `0x0005` | `LOGGER_INTERNAL_CODE_INIT_FAIL` | `LOGGER_Init()` отклонена; `source_id` = код проблемной записи таблицы, `value` = `LOGGER_INIT_FAIL_*` (см. `LOGGER_Init()`) | нет - только вывод |
 
 ---
 
@@ -139,6 +140,24 @@ typedef uint32_t (*LOGGER_RtcTimeFn_t)(void *context);
 Необязательна - без вызова `LOGGER_Init()` (или до него) `LOGGER_Log()` работает в минимальном режиме "только вывод в SWO" (либо не выводится вовсе, если определён `LOGGER_NO_ITM` и `console_fn` не задана). Повторный вызов сначала сбрасывает в память уже накопленный буфер (если буферизация уже была включена), затем применяет новую конфигурацию.
 
 Возвращает `HAL_OK`; `HAL_ERROR` - если `config == NULL`, таблица кодов пуста / не отсортирована / содержит повтор кода / содержит код из зарезервированного диапазона / некорректный приоритет / слишком длинное описание, либо (при заданном `write_fn`) один из порогов равен 0 или превышает `LOGGER_BUFFER_CAPACITY`, либо (при `LOGGER_NO_ITM`) `console_fn == NULL`.
+
+При отказе причина выводится служебным логом `LOGGER_INTERNAL_CODE_INIT_FAIL` (`0x0005`, только вывод - через `console_fn` из переданного `config`, либо в SWO): `source_id` = код проблемной записи таблицы (0, если причина не в записи), `value` = причина:
+
+| `value` | Константа | Причина |
+|---|---|---|
+| 1 | `LOGGER_INIT_FAIL_CONFIG_NULL` | `config == NULL` |
+| 2 | `LOGGER_INIT_FAIL_TABLE_EMPTY` | таблица кодов пуста |
+| 3 | `LOGGER_INIT_FAIL_CODE_RESERVED` | код из служебного диапазона `0x0000-0x00FF` |
+| 4 | `LOGGER_INIT_FAIL_BAD_PRIORITY` | некорректный приоритет записи |
+| 5 | `LOGGER_INIT_FAIL_DESC_NULL` | описание == NULL |
+| 6 | `LOGGER_INIT_FAIL_DESC_TOO_LONG` | описание длиннее `LOGGER_MAX_DESCRIPTION_LENGTH` (64) БАЙТ UTF-8 (кириллица - 2 байта/символ) |
+| 7 | `LOGGER_INIT_FAIL_NOT_SORTED` | таблица не отсортирована либо повтор кода |
+| 8 | `LOGGER_INIT_FAIL_BAD_THRESHOLD` | порог 0 либо больше `LOGGER_BUFFER_CAPACITY` |
+| 9 | `LOGGER_INIT_FAIL_CONSOLE_REQUIRED` | `LOGGER_NO_ITM` без `console_fn` |
+
+### `size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t source_id, LOGGER_Priority_t priority, int32_t value, uint32_t systick, uint32_t rtc_time, const char *description)`
+
+Формирует текстовую строку лога в буфер в том же формате, что вывод по умолчанию в SWO, без `printf`/`snprintf`: `[LOG] 0x.... src=0x.... [LOW ] val=... t=...ms rtc=... : описание` + `\r\n`. Аргументы - те же, что получает `console_fn`, поэтому вызывается прямо из неё, и любой приёмник (COM, UART, TCP) выдаёт единый формат. Работает и при `LOGGER_NO_ITM`. Результат всегда завершён `'\0'` (если `size > 0`) и обрезается по `size`; возвращает длину полной строки без `'\0'` (как `snprintf`: значение `>= size` - строка обрезана; `buf == NULL` при `size == 0` - только подсчёт длины).
 
 ---
 

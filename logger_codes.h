@@ -21,7 +21,11 @@
  * LOG_CODE_<ИМЯ>_<СОБЫТИЕ>; зависимая библиотека получает свой блок под
  * "#ifdef LOGGER_ENABLE_<ИМЯ>" только после подтверждения полного списка
  * событий; диапазон 0x0000-0x00FF зарезервирован под служебные логи
- * библиотеки (см. logger_types.h). */
+ * библиотеки (см. logger_types.h).
+ *
+ * ВАЖНО: описание кода - не длиннее LOGGER_MAX_DESCRIPTION_LENGTH (64) БАЙТ
+ * в UTF-8 (кириллица - 2 байта на символ, т.е. ~30 символов). Превышение у
+ * ЛЮБОЙ записи таблицы - LOGGER_Init() вернёт HAL_ERROR для всей таблицы. */
 
 #ifndef LOGGER_CODES_H
 #define LOGGER_CODES_H
@@ -40,6 +44,7 @@
  *
  *      LOGGER_ENABLE_CANMGR      - can_manager                  (0x41, периферия/CAN)
  *      LOGGER_ENABLE_USB_ETH     - usb_eth                       (0x42, периферия/USB)
+ *      LOGGER_ENABLE_USB_DEV     - usb_eth v2.0 (USB + COM)      (0x43, периферия/USB)
  *      LOGGER_ENABLE_LOAD_PWM    - stm32_load_pwm                (0x81, устройство)
  *      LOGGER_ENABLE_RC_BUS      - rc_bus + rc_bus_telemetry      (0x82, устройство)
  *      LOGGER_ENABLE_VESC_SERVO  - can_vesc_servo_stm32           (0x83, устройство)
@@ -154,6 +159,38 @@
 #define LOG_CODE_USB_ETH_LISTEN_FAIL   ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_LISTEN_FAIL))
 #define LOG_CODE_USB_ETH_UDP_BIND_FAIL ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_UDP_BIND_FAIL))
 #endif /* LOGGER_ENABLE_USB_ETH */
+
+#ifdef LOGGER_ENABLE_USB_DEV
+/* Адресное пространство (старший байт кода), выделенное usb_eth v2.0
+ * (общая часть USB + виртуальный COM-порт). Независимо от 0x42. */
+#define LOG_ADDR_USB_DEV 0x43U
+
+/* Смещения (младший байт) - номер события внутри диапазона usb_dev. */
+#define LOG_OFFSET_USB_DEV_USB_START_FAIL    0x00U
+#define LOG_OFFSET_USB_DEV_INIT_REFUSED      0x01U
+#define LOG_OFFSET_USB_DEV_USB_CONNECTED     0x02U
+#define LOG_OFFSET_USB_DEV_USB_DISCONNECTED  0x03U
+#define LOG_OFFSET_USB_DEV_REENUM            0x04U
+#define LOG_OFFSET_USB_DEV_COM_INIT          0x05U
+#define LOG_OFFSET_USB_DEV_COM_DEINIT        0x06U
+#define LOG_OFFSET_USB_DEV_COM_OPEN          0x07U
+#define LOG_OFFSET_USB_DEV_COM_CLOSE         0x08U
+#define LOG_OFFSET_USB_DEV_COM_TX_BUSY       0x09U
+#define LOG_OFFSET_USB_DEV_ETH_DEINIT        0x0AU
+
+/* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом usb_dev. */
+#define LOG_CODE_USB_DEV_USB_START_FAIL    ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_USB_START_FAIL))
+#define LOG_CODE_USB_DEV_INIT_REFUSED      ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_INIT_REFUSED))
+#define LOG_CODE_USB_DEV_USB_CONNECTED     ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_USB_CONNECTED))
+#define LOG_CODE_USB_DEV_USB_DISCONNECTED  ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_USB_DISCONNECTED))
+#define LOG_CODE_USB_DEV_REENUM            ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_REENUM))
+#define LOG_CODE_USB_DEV_COM_INIT          ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_INIT))
+#define LOG_CODE_USB_DEV_COM_DEINIT        ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_DEINIT))
+#define LOG_CODE_USB_DEV_COM_OPEN          ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_OPEN))
+#define LOG_CODE_USB_DEV_COM_CLOSE         ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_CLOSE))
+#define LOG_CODE_USB_DEV_COM_TX_BUSY       ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_TX_BUSY))
+#define LOG_CODE_USB_DEV_ETH_DEINIT        ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_ETH_DEINIT))
+#endif /* LOGGER_ENABLE_USB_DEV */
 
 /* ======================================================================== */
 /*  КАТЕГОРИЯ 3/4 - ВНЕШНИЕ УСТРОЙСТВА/ДАТЧИКИ на периферии (0x80xx-0xDFxx) */
@@ -359,6 +396,25 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_USB_ETH_LISTEN_FAIL,   LOGGER_PRIORITY_HIGH,   "USB_ETH: не удалось открыть TCP-порт" },
     { LOG_CODE_USB_ETH_UDP_BIND_FAIL, LOGGER_PRIORITY_HIGH,   "USB_ETH: не удалось открыть UDP-порт" },
 #endif /* LOGGER_ENABLE_USB_ETH */
+
+    /* ------------------------------------------------------------------ */
+    /*  Блок usb_eth v2.0 (usb_dev: общая часть USB + виртуальный COM).    */
+    /*  Диапазон - см. LOG_ADDR_USB_DEV выше. Включается через            */
+    /*  "#define LOGGER_ENABLE_USB_DEV" до #include "logger_codes.h".      */
+    /* ------------------------------------------------------------------ */
+#ifdef LOGGER_ENABLE_USB_DEV
+    { LOG_CODE_USB_DEV_USB_START_FAIL,   LOGGER_PRIORITY_HIGH,   "usb_dev: TinyUSB не запустился" },
+    { LOG_CODE_USB_DEV_INIT_REFUSED,     LOGGER_PRIORITY_HIGH,   "usb_dev: Init отклонён - нет точек сети+COM" },
+    { LOG_CODE_USB_DEV_USB_CONNECTED,    LOGGER_PRIORITY_LOW,    "usb_dev: подключено к ПК" },
+    { LOG_CODE_USB_DEV_USB_DISCONNECTED, LOGGER_PRIORITY_MEDIUM, "usb_dev: отключено от ПК (кабель/сон ПК)" },
+    { LOG_CODE_USB_DEV_REENUM,           LOGGER_PRIORITY_LOW,    "usb_dev: смена набора устройств (re-enum)" },
+    { LOG_CODE_USB_DEV_COM_INIT,         LOGGER_PRIORITY_LOW,    "usb_com: COM-порт включён" },
+    { LOG_CODE_USB_DEV_COM_DEINIT,       LOGGER_PRIORITY_LOW,    "usb_com: COM-порт выключен" },
+    { LOG_CODE_USB_DEV_COM_OPEN,         LOGGER_PRIORITY_LOW,    "usb_com: порт открыт на ПК (DTR)" },
+    { LOG_CODE_USB_DEV_COM_CLOSE,        LOGGER_PRIORITY_LOW,    "usb_com: порт закрыт на ПК" },
+    { LOG_CODE_USB_DEV_COM_TX_BUSY,      LOGGER_PRIORITY_MEDIUM, "usb_com: TX отклонён - буфер полон" },
+    { LOG_CODE_USB_DEV_ETH_DEINIT,       LOGGER_PRIORITY_LOW,    "usb_eth: сеть выключена (DeInit)" },
+#endif /* LOGGER_ENABLE_USB_DEV */
 
     /* ------------------------------------------------------------------ */
     /*  ВНЕШНИЕ УСТРОЙСТВА/ДАТЧИКИ на периферии (0x80xx-0xDFxx).           */

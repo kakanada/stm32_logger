@@ -3,8 +3,8 @@
  * @file    logger.c
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
- * @date    29.09.2026
- * @version 1.8.1
+ * @date    04.10.2026
+ * @version 1.9
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -111,35 +111,62 @@ static uint32_t logger_mark_now(void)
 #endif
 
 /* ------------------------------------------------------------------------ */
-/*  Быстрый вывод в SWO (ITM) - без printf/snprintf                         */
-/*  Весь этот раздел исключается из сборки, если определён LOGGER_NO_ITM    */
-/*  (ядра без блока ITM - Cortex-M0/M0+, см. README.md) - на таких ядрах    */
-/*  console_fn становится обязательной.                                    */
+/*  Форматирование строки лога - без printf/snprintf. Один и тот же формат  */
+/*  используется и для SWO (ITM, по символу), и для LOGGER_FormatConsoleLine */
+/*  (в буфер). Под LOGGER_NO_ITM (ядра без блока ITM - Cortex-M0/M0+, см.   */
+/*  README.md) вывод в ITM исключается из сборки - console_fn обязательна,  */
+/*  а форматтер в буфер остаётся доступным.                                 */
 /* ------------------------------------------------------------------------ */
 
-#ifndef LOGGER_NO_ITM
-
-/** @brief Отправляет один символ в SWO (ITM).
- * @param  c символ для вывода */
-static void logger_swo_putc(char c)
+/** Приёмник символов: to_buf != 0 - запись в buf (с учётом size; buf может
+ *  быть NULL - тогда только подсчёт длины); to_buf == 0 - вывод в ITM.
+ *  len считает ВСЕ символы, как snprintf. */
+typedef struct
 {
-    (void)ITM_SendChar((uint32_t)c);
+    char    *buf;
+    size_t   size;
+    size_t   len;
+    uint8_t  to_buf;
+} logger_out_t;
+
+/** @brief Принимает один символ: в буфер (если задан и есть место под
+ *         символ и завершающий '\0') либо в SWO (ITM).
+ * @param  o приёмник
+ * @param  c символ для вывода */
+static void logger_out_putc(logger_out_t *o, char c)
+{
+    if (o->to_buf != 0U)
+    {
+        if ((o->buf != NULL) && ((o->len + 1U) < o->size))
+        {
+            o->buf[o->len] = c;
+        }
+    }
+#ifndef LOGGER_NO_ITM
+    else
+    {
+        (void)ITM_SendChar((uint32_t)c);
+    }
+#endif
+    o->len++;
 }
 
-/** @brief Отправляет строку в SWO посимвольно.
+/** @brief Выводит строку посимвольно.
+ * @param  o приёмник
  * @param  s строка, завершённая '\0' */
-static void logger_swo_puts(const char *s)
+static void logger_out_puts(logger_out_t *o, const char *s)
 {
     while (*s != '\0')
     {
-        logger_swo_putc(*s);
+        logger_out_putc(o, *s);
         s++;
     }
 }
 
 /** @brief Печатает 16-битное число в HEX, ровно 4 символа, без "0x".
+ * @param  o     приёмник
  * @param  value число для вывода */
-static void logger_swo_put_hex16(uint16_t value)
+static void logger_out_hex16(logger_out_t *o, uint16_t value)
 {
     static const char hex_digits[] = "0123456789ABCDEF"; /* 17 байт с '\0', не используется как строка */
     char buf[4];
@@ -151,13 +178,14 @@ static void logger_swo_put_hex16(uint16_t value)
     }
     for (uint8_t i = 0U; i < 4U; i++)
     {
-        logger_swo_putc(buf[i]);
+        logger_out_putc(o, buf[i]);
     }
 }
 
 /** @brief Печатает беззнаковое 32-битное число в десятичном виде.
+ * @param  o     приёмник
  * @param  value число для вывода */
-static void logger_swo_put_uint32(uint32_t value)
+static void logger_out_uint32(logger_out_t *o, uint32_t value)
 {
     char buf[10]; /* максимум 10 цифр у 4294967295 */
     uint8_t idx = 0U;
@@ -180,27 +208,28 @@ static void logger_swo_put_uint32(uint32_t value)
     while (idx > 0U)
     {
         idx--;
-        logger_swo_putc(buf[idx]);
+        logger_out_putc(o, buf[idx]);
     }
 }
 
 /** @brief Печатает знаковое 32-битное число в десятичном виде.
+ * @param  o     приёмник
  * @param  value число для вывода */
-static void logger_swo_put_int32(int32_t value)
+static void logger_out_int32(logger_out_t *o, int32_t value)
 {
     if (value < 0)
     {
-        logger_swo_putc('-');
+        logger_out_putc(o, '-');
         /* аккуратно с INT32_MIN - его положительной пары не существует в int32_t */
-        logger_swo_put_uint32((uint32_t)(-(value + 1)) + 1U);
+        logger_out_uint32(o, (uint32_t)(-(value + 1)) + 1U);
     }
     else
     {
-        logger_swo_put_uint32((uint32_t)value);
+        logger_out_uint32(o, (uint32_t)value);
     }
 }
 
-/** @brief Возвращает короткое (4 символа) текстовое имя приоритета для SWO.
+/** @brief Возвращает короткое (4 символа) текстовое имя приоритета.
  * @param  priority приоритет лога
  * @return строка вида "LOW ", "MED ", "HIGH" либо "??? " */
 static const char *logger_priority_name(LOGGER_Priority_t priority)
@@ -214,6 +243,38 @@ static const char *logger_priority_name(LOGGER_Priority_t priority)
     }
 }
 
+/** @brief Формирует строку лога в приёмник - единый формат SWO и
+ *         LOGGER_FormatConsoleLine().
+ * @param  o           приёмник
+ * @param  code        код лога
+ * @param  source_id   идентификатор источника события
+ * @param  priority    приоритет кода
+ * @param  value       значение переменной
+ * @param  systick     HAL_GetTick() на момент события
+ * @param  rtc_time    показание RTC на момент события, либо 0
+ * @param  description текстовое описание кода, либо NULL */
+static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_id,
+                                LOGGER_Priority_t priority, int32_t value, uint32_t systick,
+                                uint32_t rtc_time, const char *description)
+{
+    logger_out_puts(o, "[LOG] 0x");
+    logger_out_hex16(o, code);
+    logger_out_puts(o, " src=0x");
+    logger_out_hex16(o, source_id);
+    logger_out_puts(o, " [");
+    logger_out_puts(o, logger_priority_name(priority));
+    logger_out_puts(o, "] val=");
+    logger_out_int32(o, value);
+    logger_out_puts(o, " t=");
+    logger_out_uint32(o, systick);
+    logger_out_puts(o, "ms rtc=");
+    logger_out_uint32(o, rtc_time);
+    logger_out_puts(o, " : ");
+    logger_out_puts(o, (description != NULL) ? description : "???");
+    logger_out_puts(o, "\r\n");
+}
+
+#ifndef LOGGER_NO_ITM
 /** @brief Вывод по умолчанию в SWO - используется, если console_fn не задана.
  * @param  code        код лога
  * @param  source_id   идентификатор источника события
@@ -226,24 +287,36 @@ static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority
                                int32_t value, uint32_t systick, uint32_t rtc_time,
                                const char *description)
 {
-    logger_swo_puts("[LOG] 0x");
-    logger_swo_put_hex16(code);
-    logger_swo_puts(" src=0x");
-    logger_swo_put_hex16(source_id);
-    logger_swo_puts(" [");
-    logger_swo_puts(logger_priority_name(priority));
-    logger_swo_puts("] val=");
-    logger_swo_put_int32(value);
-    logger_swo_puts(" t=");
-    logger_swo_put_uint32(systick);
-    logger_swo_puts("ms rtc=");
-    logger_swo_put_uint32(rtc_time);
-    logger_swo_puts(" : ");
-    logger_swo_puts((description != NULL) ? description : "???");
-    logger_swo_puts("\r\n");
+    logger_out_t out = { NULL, 0U, 0U, 0U };
+    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description);
 }
-
 #endif /* !LOGGER_NO_ITM */
+
+/** @brief Формирует строку лога в буфер - см. полное описание в logger.h.
+ * @param  buf         буфер результата (может быть NULL при size == 0)
+ * @param  size        размер buf в байтах
+ * @param  code        код лога
+ * @param  source_id   идентификатор источника события
+ * @param  priority    приоритет кода
+ * @param  value       значение переменной
+ * @param  systick     HAL_GetTick() на момент события
+ * @param  rtc_time    показание RTC на момент события, либо 0
+ * @param  description текстовое описание кода, либо NULL
+ * @return длина полной строки без '\0' (как у snprintf) */
+size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
+                                 LOGGER_Priority_t priority, int32_t value, uint32_t systick,
+                                 uint32_t rtc_time, const char *description)
+{
+    logger_out_t out = { buf, size, 0U, 1U };
+
+    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description);
+
+    if ((buf != NULL) && (size > 0U))
+    {
+        buf[(out.len < size) ? out.len : (size - 1U)] = '\0';
+    }
+    return out.len;
+}
 
 /* ------------------------------------------------------------------------ */
 /*  Поиск записи в таблице кодов (двоичный поиск / служебная таблица)      */
@@ -578,14 +651,46 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
 /*  Инициализация                                                           */
 /* ------------------------------------------------------------------------ */
 
+/** @brief Сообщает причину отказа LOGGER_Init() служебным логом
+ *         LOGGER_INTERNAL_CODE_INIT_FAIL - только вывод (console_fn из
+ *         переданного config, либо SWO; не буферизуется, s_config ещё не
+ *         применён).
+ * @param  config     конфигурация, переданная в LOGGER_Init() (может быть NULL)
+ * @param  reason     LOGGER_INIT_FAIL_* - причина отказа (идёт в value)
+ * @param  entry_code код проблемной записи таблицы, либо 0 (идёт в source_id)
+ * @return всегда HAL_ERROR - чтобы писать "return logger_init_fail(...)" */
+static HAL_StatusTypeDef logger_init_fail(const LOGGER_Config_t *config, int32_t reason,
+                                           uint16_t entry_code)
+{
+    const LOGGER_LogEntry_t *entry   = logger_find_internal_entry(LOGGER_INTERNAL_CODE_INIT_FAIL);
+    const char              *desc    = (entry != NULL) ? entry->description : NULL;
+    uint32_t                 systick = HAL_GetTick();
+
+    if ((config != NULL) && (config->console_fn != NULL))
+    {
+        config->console_fn(config->console_context, LOGGER_INTERNAL_CODE_INIT_FAIL, entry_code,
+                            LOGGER_PRIORITY_HIGH, reason, systick, 0U, desc);
+    }
+#ifndef LOGGER_NO_ITM
+    else
+    {
+        logger_swo_output(LOGGER_INTERNAL_CODE_INIT_FAIL, entry_code, LOGGER_PRIORITY_HIGH,
+                           reason, systick, 0U, desc);
+    }
+#endif
+    return HAL_ERROR;
+}
+
 /** @brief Инициализирует библиотеку - см. полное описание в logger.h.
+ *         При отказе дополнительно выводит причину (LOGGER_INIT_FAIL_*) и код
+ *         проблемной записи таблицы служебным логом INIT_FAIL.
  * @param  config конфигурация логгера
  * @return HAL_OK при успехе; HAL_ERROR при некорректной таблице кодов/config */
 HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
 {
     if (config == NULL)
     {
-        return HAL_ERROR;
+        return logger_init_fail(NULL, LOGGER_INIT_FAIL_CONFIG_NULL, 0U);
     }
 
     /* Проверка таблицы кодов - один раз, здесь, чтобы LOGGER_Log() мог
@@ -593,7 +698,7 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
      * дополнительных проверок в рантайме. */
     if (LOGGER_LOG_TABLE_SIZE == 0U)
     {
-        return HAL_ERROR;
+        return logger_init_fail(config, LOGGER_INIT_FAIL_TABLE_EMPTY, 0U);
     }
 
     for (uint32_t i = 0U; i < LOGGER_LOG_TABLE_SIZE; i++)
@@ -602,19 +707,20 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
 
         if (entry->code <= LOGGER_INTERNAL_CODE_MAX)
         {
-            return HAL_ERROR; /* код из зарезервированного служебного диапазона 0x0000-0x00FF */
+            /* код из зарезервированного служебного диапазона 0x0000-0x00FF */
+            return logger_init_fail(config, LOGGER_INIT_FAIL_CODE_RESERVED, entry->code);
         }
 
         if ((entry->priority != LOGGER_PRIORITY_LOW) &&
             (entry->priority != LOGGER_PRIORITY_MEDIUM) &&
             (entry->priority != LOGGER_PRIORITY_HIGH))
         {
-            return HAL_ERROR; /* некорректный приоритет в таблице */
+            return logger_init_fail(config, LOGGER_INIT_FAIL_BAD_PRIORITY, entry->code);
         }
 
         if (entry->description == NULL)
         {
-            return HAL_ERROR;
+            return logger_init_fail(config, LOGGER_INIT_FAIL_DESC_NULL, entry->code);
         }
 
         uint32_t len = 0U;
@@ -624,12 +730,14 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
         }
         if (len > LOGGER_MAX_DESCRIPTION_LENGTH)
         {
-            return HAL_ERROR; /* описание длиннее LOGGER_MAX_DESCRIPTION_LENGTH */
+            /* описание длиннее LOGGER_MAX_DESCRIPTION_LENGTH */
+            return logger_init_fail(config, LOGGER_INIT_FAIL_DESC_TOO_LONG, entry->code);
         }
 
         if ((i > 0U) && (entry->code <= LOGGER_LogTable[i - 1U].code))
         {
-            return HAL_ERROR; /* таблица не отсортирована по возрастанию либо есть повтор кода */
+            /* таблица не отсортирована по возрастанию либо есть повтор кода */
+            return logger_init_fail(config, LOGGER_INIT_FAIL_NOT_SORTED, entry->code);
         }
     }
 
@@ -639,7 +747,7 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
             (config->threshold_medium == 0U) || (config->threshold_medium > LOGGER_BUFFER_CAPACITY) ||
             (config->threshold_high == 0U)   || (config->threshold_high   > LOGGER_BUFFER_CAPACITY))
         {
-            return HAL_ERROR;
+            return logger_init_fail(config, LOGGER_INIT_FAIL_BAD_THRESHOLD, 0U);
         }
     }
 
@@ -649,7 +757,7 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
      * будут просто молча теряться. */
     if (config->console_fn == NULL)
     {
-        return HAL_ERROR;
+        return logger_init_fail(config, LOGGER_INIT_FAIL_CONSOLE_REQUIRED, 0U);
     }
 #endif
 
