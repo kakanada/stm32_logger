@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.9
+ * @version 1.11
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -32,7 +32,17 @@ static uint8_t           s_buffering_active;
 static uint8_t           s_threshold[LOGGER_PRIORITY_COUNT];
 
 static LOGGER_BUFFER_SECTION_ATTR LOGGER_Record_t s_buffer[LOGGER_BUFFER_CAPACITY];
+/** s_buffer - КОЛЬЦО: s_buffer_head - индекс самой старой записи,
+ *  s_buffer_count - сколько записей в кольце (включая те, что прямо сейчас
+ *  уходят в write_fn). Пока идёт write_fn, новые записи пишутся в свободную
+ *  часть кольца - сброс не блокирует приём. */
+static uint16_t          s_buffer_head;
 static uint16_t          s_buffer_count;
+/** Счётчик записей, которые не удалось сохранить (кольцо полно и освободить
+ *  место не вышло) - с момента старта, см. LOGGER_GetDroppedCount(). */
+static uint32_t          s_dropped_count;
+/** Пик заполнения кольца - см. LOGGER_GetBufferHighWater(). */
+static uint16_t          s_high_water;
 /** Флаг "сброс уже идёт" - делает logger_flush_raw() эксклюзивным между
  *  конкурентными вызовами (см. комментарий перед функцией: без этого флага
  *  два одновременных сброса из разных контекстов вычитают flushed_count из
@@ -182,29 +192,41 @@ static void logger_out_hex16(logger_out_t *o, uint16_t value)
     }
 }
 
-/** @brief Печатает беззнаковое 32-битное число в десятичном виде.
- * @param  o     приёмник
- * @param  value число для вывода */
-static void logger_out_uint32(logger_out_t *o, uint32_t value)
+/** @brief Печатает десятичное число, выровненное вправо пробелами до width
+ *         (если число длиннее - без обрезки).
+ * @param  o         приёмник
+ * @param  magnitude модуль числа
+ * @param  negative  1 - перед числом знак '-'
+ * @param  width     минимальная ширина поля */
+static void logger_out_dec(logger_out_t *o, uint32_t magnitude, uint8_t negative, uint8_t width)
 {
     char buf[10]; /* максимум 10 цифр у 4294967295 */
     uint8_t idx = 0U;
 
-    if (value == 0U)
+    if (magnitude == 0U)
     {
         buf[idx] = '0';
         idx++;
     }
     else
     {
-        while (value != 0U)
+        while (magnitude != 0U)
         {
-            buf[idx] = (char)('0' + (value % 10U));
+            buf[idx] = (char)('0' + (magnitude % 10U));
             idx++;
-            value /= 10U;
+            magnitude /= 10U;
         }
     }
 
+    uint8_t used = (uint8_t)(idx + negative);
+    for (uint8_t i = used; i < width; i++)
+    {
+        logger_out_putc(o, ' ');
+    }
+    if (negative != 0U)
+    {
+        logger_out_putc(o, '-');
+    }
     while (idx > 0U)
     {
         idx--;
@@ -212,68 +234,70 @@ static void logger_out_uint32(logger_out_t *o, uint32_t value)
     }
 }
 
-/** @brief Печатает знаковое 32-битное число в десятичном виде.
- * @param  o     приёмник
- * @param  value число для вывода */
-static void logger_out_int32(logger_out_t *o, int32_t value)
+/** @brief Беззнаковое 32-битное число, выровнено вправо до width. */
+static void logger_out_uint32(logger_out_t *o, uint32_t value, uint8_t width)
+{
+    logger_out_dec(o, value, 0U, width);
+}
+
+/** @brief Знаковое 32-битное число, выровнено вправо до width. */
+static void logger_out_int32(logger_out_t *o, int32_t value, uint8_t width)
 {
     if (value < 0)
     {
-        logger_out_putc(o, '-');
         /* аккуратно с INT32_MIN - его положительной пары не существует в int32_t */
-        logger_out_uint32(o, (uint32_t)(-(value + 1)) + 1U);
+        logger_out_dec(o, (uint32_t)(-(value + 1)) + 1U, 1U, width);
     }
     else
     {
-        logger_out_uint32(o, (uint32_t)value);
+        logger_out_dec(o, (uint32_t)value, 0U, width);
     }
 }
 
-/** @brief Возвращает короткое (4 символа) текстовое имя приоритета.
- * @param  priority приоритет лога
- * @return строка вида "LOW ", "MED ", "HIGH" либо "??? " */
-static const char *logger_priority_name(LOGGER_Priority_t priority)
+/** @brief Одна буква приоритета: L / M / H (либо '?'). */
+static char logger_priority_letter(LOGGER_Priority_t priority)
 {
     switch (priority)
     {
-        case LOGGER_PRIORITY_LOW:    return "LOW ";
-        case LOGGER_PRIORITY_MEDIUM: return "MED ";
-        case LOGGER_PRIORITY_HIGH:   return "HIGH";
-        default:                     return "??? ";
+        case LOGGER_PRIORITY_LOW:    return 'L';
+        case LOGGER_PRIORITY_MEDIUM: return 'M';
+        case LOGGER_PRIORITY_HIGH:   return 'H';
+        default:                     return '?';
     }
 }
 
 /** @brief Формирует строку лога в приёмник - единый формат SWO и
- *         LOGGER_FormatConsoleLine().
+ *         LOGGER_FormatConsoleLine() (колонки фиксированной ширины):
+ *         "<мс,8> <ГРУППА,8> <L|M|H> 0x<код,4> <src,4> <val,11> <описание>\r\n".
+ *         Показание RTC в строку не входит (остаётся в записи/write_fn).
  * @param  o           приёмник
  * @param  code        код лога
  * @param  source_id   идентификатор источника события
  * @param  priority    приоритет кода
  * @param  value       значение переменной
  * @param  systick     HAL_GetTick() на момент события
- * @param  rtc_time    показание RTC на момент события, либо 0
+ * @param  rtc_time    не используется (совместимость сигнатуры)
  * @param  description текстовое описание кода, либо NULL */
 static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_id,
                                 LOGGER_Priority_t priority, int32_t value, uint32_t systick,
                                 uint32_t rtc_time, const char *description)
 {
-    logger_out_puts(o, "[LOG] 0x");
+    (void)rtc_time;
+    logger_out_uint32(o, systick, 8U);
+    logger_out_putc(o, ' ');
+    logger_out_puts(o, (code <= LOGGER_INTERNAL_CODE_MAX) ? "LOGGER  " : LOGGER_GetGroupName(code));
+    logger_out_putc(o, ' ');
+    logger_out_putc(o, logger_priority_letter(priority));
+    logger_out_puts(o, " 0x");
     logger_out_hex16(o, code);
-    logger_out_puts(o, " src=0x");
+    logger_out_putc(o, ' ');
     logger_out_hex16(o, source_id);
-    logger_out_puts(o, " [");
-    logger_out_puts(o, logger_priority_name(priority));
-    logger_out_puts(o, "] val=");
-    logger_out_int32(o, value);
-    logger_out_puts(o, " t=");
-    logger_out_uint32(o, systick);
-    logger_out_puts(o, "ms rtc=");
-    logger_out_uint32(o, rtc_time);
-    logger_out_puts(o, " : ");
+    logger_out_putc(o, ' ');
+    logger_out_int32(o, value, 11U);
+    logger_out_putc(o, ' ');
     logger_out_puts(o, (description != NULL) ? description : "???");
     logger_out_puts(o, "\r\n");
 }
-
 #ifndef LOGGER_NO_ITM
 /** @brief Вывод по умолчанию в SWO - используется, если console_fn не задана.
  * @param  code        код лога
@@ -411,34 +435,30 @@ static void logger_critical_exit(uint32_t primask)
 static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
                          uint8_t persist);
 
-/** @brief Копирует уже накопленные записи буфера в write_fn и "срезает"
- *         только сброшенный хвост (а не весь буфер) - записи, добавленные
- *         конкурентно ПОКА идёт write_fn (I/O вне критической секции, может
- *         занять заметное время), остаются в буфере, а не пропадают и не
- *         читаются наполовину. Снимок count/трим - под критической секцией,
- *         сам вызов write_fn - нет. Эксклюзивность между конкурентными
- *         сбросами обеспечивает s_flush_in_progress: если сброс уже идёт в
- *         другом контексте, этот вызов сразу возвращает 0 - без этого два
- *         конкурентных сброса вычли бы flushed_count из s_buffer_count по
- *         разу каждый, уводя счётчик в underflow (найдено тестом test_library
- *         на v1.8, см. историю). Вычитание дополнительно защищено от
- *         underflow на случай прочих гонок - самовосстановление вместо
- *         необратимого зависания движка логов. Без служебного лога о сбросе
- *         (нужно для LOGGER_EmergencySave() - минимум действий на аварийном
- *         пути). Вызывается только при s_buffering_active != 0.
- * @return фактическое количество отправленных в write_fn записей; 0, если
- *          буфер пуст либо сброс уже шёл в другом контексте */
+/** @brief Отправляет в write_fn один непрерывный сегмент кольца (от головы
+ *         до конца массива либо до последней записи - что раньше) и
+ *         освобождает его. Записи, добавленные конкурентно ПОКА идёт write_fn
+ *         (I/O вне критической секции, может занять заметное время),
+ *         ложатся в свободную часть кольца и не мешаются - ничего не
+ *         двигается и не теряется. Эксклюзивность между конкурентными
+ *         сбросами - s_flush_in_progress: если сброс уже идёт в другом
+ *         контексте, вызов сразу возвращает 0 (иначе два сброса освободили бы
+ *         одни и те же записи дважды - underflow, найден тестом на v1.8).
+ *         Без служебного лога (нужно для LOGGER_EmergencySave()). Вызывается
+ *         только при s_buffering_active != 0.
+ * @return число отправленных в write_fn записей; 0, если кольцо пусто либо
+ *          сброс уже шёл в другом контексте */
 static uint16_t logger_flush_raw(void)
 {
     uint32_t primask = logger_critical_enter();
 
-    if (s_buffer_count > (uint16_t)LOGGER_BUFFER_CAPACITY)
+    if ((s_buffer_count > (uint16_t)LOGGER_BUFFER_CAPACITY) ||
+        (s_buffer_head >= (uint16_t)LOGGER_BUFFER_CAPACITY))
     {
-        /* Самовосстановление: в нормальном режиме такого быть не может (см.
-         * защиту от underflow ниже и в logger_buffer_push), но если счётчик
-         * всё же оказался повреждён - не читаем write_fn за границей
-         * s_buffer, отбрасываем накопленное и продолжаем работу, а не
-         * зависаем/не читаем чужую память. */
+        /* Самовосстановление при повреждённых индексах - не читаем write_fn
+         * за границей s_buffer; накопленное отбрасывается и учитывается. */
+        s_dropped_count     += s_buffer_count;
+        s_buffer_head        = 0U;
         s_buffer_count       = 0U;
         s_max_priority_count = 0U;
         logger_critical_exit(primask);
@@ -451,38 +471,50 @@ static uint16_t logger_flush_raw(void)
         return 0U;
     }
 
-    s_flush_in_progress   = 1U;
-    uint16_t flushed_count = s_buffer_count;
+    uint16_t to_end  = (uint16_t)((uint16_t)LOGGER_BUFFER_CAPACITY - s_buffer_head);
+    uint16_t segment = (s_buffer_count < to_end) ? s_buffer_count : to_end;
+    uint16_t head    = s_buffer_head;
+
+    s_flush_in_progress = 1U;
     logger_critical_exit(primask);
 
-    s_config.write_fn(s_config.write_context, (const uint8_t *)s_buffer,
-                       (uint32_t)flushed_count * (uint32_t)sizeof(LOGGER_Record_t));
+    s_config.write_fn(s_config.write_context, (const uint8_t *)&s_buffer[head],
+                       (uint32_t)segment * (uint32_t)sizeof(LOGGER_Record_t));
 
     primask = logger_critical_enter();
-    if (s_buffer_count > flushed_count)
+    s_buffer_head = (uint16_t)(head + segment);
+    if (s_buffer_head >= (uint16_t)LOGGER_BUFFER_CAPACITY)
     {
-        /* За время write_fn добавились новые записи (индексы >= flushed_count,
-         * см. logger_buffer_push) - сдвигаем их в начало, не теряем. */
-        memmove(&s_buffer[0], &s_buffer[flushed_count],
-                (size_t)(s_buffer_count - flushed_count) * sizeof(LOGGER_Record_t));
-        s_buffer_count = (uint16_t)(s_buffer_count - flushed_count);
+        s_buffer_head = 0U;
     }
-    else
-    {
-        /* s_buffer_count <= flushed_count всегда должно выполняться (сброс
-         * эксклюзивен - никто больше не мог уменьшить счётчик) - явная
-         * защита от underflow вместо безусловного вычитания на случай
-         * будущих изменений конкурентной модели. */
-        s_buffer_count = 0U;
-    }
+    s_buffer_count = (s_buffer_count >= segment) ? (uint16_t)(s_buffer_count - segment) : 0U;
     /* Приоритет оставшегося хвоста не пересчитывается - следующий порог по
-     * нему наберётся заново (см. README, "Честные ограничения"): в редком
-     * случае это лишь чуть отложит следующий сброс, не теряет данные. */
+     * нему наберётся заново (см. README): лишь чуть отложит сброс по порогу,
+     * данные не теряет (а сброс по уровню заполнения от этого не зависит). */
     s_max_priority_count = 0U;
     s_flush_in_progress  = 0U;
     logger_critical_exit(primask);
 
-    return flushed_count;
+    return segment;
+}
+
+/** @brief Сбрасывает всё накопленное (до 2 сегментов - кольцо могло
+ *         "перевалить" через конец массива) без служебного лога.
+ * @return суммарное число отправленных записей */
+static uint16_t logger_flush_all_raw(void)
+{
+    uint16_t total = 0U;
+
+    for (uint8_t pass = 0U; pass < 2U; pass++)
+    {
+        uint16_t n = logger_flush_raw();
+        if (n == 0U)
+        {
+            break;
+        }
+        total = (uint16_t)(total + n);
+    }
+    return total;
 }
 
 /** @brief Сбрасывает буфер в write_fn (если не пуст) и логирует служебное
@@ -495,7 +527,7 @@ static void logger_flush_internal(void)
         return;
     }
 
-    uint16_t flushed_count = logger_flush_raw();
+    uint16_t flushed_count = logger_flush_all_raw();
     if (flushed_count == 0U)
     {
         return;
@@ -504,11 +536,16 @@ static void logger_flush_internal(void)
     logger_emit(LOGGER_INTERNAL_CODE_FLUSH, 0U, (int32_t)flushed_count, HAL_GetTick(), 0U);
 }
 
-/** @brief Добавляет запись в буфер и, при достижении порога по текущему
- *         максимальному приоритету буфера, инициирует сброс в память. O(1).
- *         Резервирование места (индекс/счётчики) - под короткой критической
- *         секцией (см. logger_critical_enter()), сам flush (I/O) - вне её,
- *         чтобы конкурентный вызов из ISR не ждал длительный write_fn.
+/** @brief Добавляет запись в кольцо и инициирует сброс по порогу приоритета
+ *         ЛИБО по уровню заполнения LOGGER_BUFFER_WATERMARK (чтобы к моменту
+ *         полного кольца write_fn уже работал, а приём продолжался в
+ *         свободной части). Если кольцо всё же полно: пробует освободить
+ *         место сбросом; если сброс уже идёт в другом контексте - в потоке
+ *         (не ISR, прерывания разрешены) ждёт до LOGGER_OVERFLOW_WAIT_MS, в
+ *         ISR/при замаскированных прерываниях не ждёт. Только если освободить
+ *         место не вышло - запись отбрасывается и считается
+ *         (LOGGER_GetDroppedCount()). Резервирование - под короткой
+ *         критической секцией, I/O и ожидание - вне её.
  * @param  code      код лога
  * @param  priority  приоритет кода
  * @param  source_id идентификатор источника события
@@ -518,49 +555,87 @@ static void logger_flush_internal(void)
 static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16_t source_id,
                                 int32_t value, uint32_t systick, uint32_t rtc_time)
 {
-    uint32_t primask = logger_critical_enter();
+    uint32_t wait_start = 0U;
+    uint8_t  waiting    = 0U;
+    uint8_t  need_flush = 0U;
 
-    if (s_buffer_count >= (uint16_t)LOGGER_BUFFER_CAPACITY)
+    for (;;)
     {
-        /* Физическая защита буфера - не должна срабатывать при корректно
-         * настроенных порогах (см. LOGGER_Init), но не даёт выйти за границы
-         * массива. Запись отбрасывается (не зовём flush из критической
-         * секции - это I/O), но событие подсвечивается служебным логом.
-         * Дальше пробуем flush - и если буфер действительно просто полон
-         * (например, write_fn был занят чужим сбросом), он его разгрузит;
-         * и если счётчик был повреждён (см. logger_flush_raw), он же
-         * самовосстановится - без этого вызова логгер молчал бы до
-         * LOGGER_Flush()/перезагрузки (см. историю v1.8 -> v1.8.1). */
+        uint32_t primask = logger_critical_enter();
+
+        if (s_buffer_count < (uint16_t)LOGGER_BUFFER_CAPACITY)
+        {
+            uint16_t index = (uint16_t)(s_buffer_head + s_buffer_count);
+            if (index >= (uint16_t)LOGGER_BUFFER_CAPACITY)
+            {
+                index = (uint16_t)(index - (uint16_t)LOGGER_BUFFER_CAPACITY);
+            }
+
+            s_buffer[index].code      = code;
+            s_buffer[index].source_id = source_id;
+            s_buffer[index].value     = value;
+            s_buffer[index].systick   = systick;
+            s_buffer[index].rtc_time  = rtc_time;
+            s_buffer_count            = (uint16_t)(s_buffer_count + 1U);
+
+            if (s_buffer_count > s_high_water)
+            {
+                s_high_water = s_buffer_count;
+            }
+
+            if ((s_max_priority_count == 0U) || (priority > s_max_priority))
+            {
+                s_max_priority       = priority;
+                s_max_priority_count = 1U;
+            }
+            else if (priority == s_max_priority)
+            {
+                s_max_priority_count++;
+            }
+            /* priority < s_max_priority: запись не учитывается в счётчике
+             * триггера сброса - см. архитектуру в logger.h */
+
+            need_flush = ((s_max_priority_count >= s_threshold[s_max_priority]) ||
+                          (s_buffer_count >= (uint16_t)LOGGER_BUFFER_WATERMARK)) ? 1U : 0U;
+
+            logger_critical_exit(primask);
+            break;
+        }
+
+        logger_critical_exit(primask);
+
+        /* Кольцо полно. Пробуем освободить место сбросом. */
+        if (logger_flush_raw() != 0U)
+        {
+            continue;
+        }
+
+        /* Сброс уже идёт в другом контексте (или write_fn не вернулся).
+         * Ждать можно только в потоке с разрешёнными прерываниями - в ISR
+         * либо при PRIMASK=1 HAL_GetTick() не растёт, ожидание зависло бы. */
+        uint8_t can_wait = ((LOGGER_OVERFLOW_WAIT_MS != 0U) &&
+                            (__get_IPSR() == 0U) && ((primask & 1U) == 0U)) ? 1U : 0U;
+        if (can_wait != 0U)
+        {
+            if (waiting == 0U)
+            {
+                waiting    = 1U;
+                wait_start = HAL_GetTick();
+                continue;
+            }
+            if ((HAL_GetTick() - wait_start) < (uint32_t)LOGGER_OVERFLOW_WAIT_MS)
+            {
+                continue;
+            }
+        }
+
+        /* Освободить место не удалось - честно считаем потерю. */
+        primask = logger_critical_enter();
+        s_dropped_count++;
         logger_critical_exit(primask);
         logger_emit(LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, 0U, (int32_t)code, systick, 0U);
-        logger_flush_internal();
         return;
     }
-
-    uint16_t index = s_buffer_count;
-
-    s_buffer[index].code      = code;
-    s_buffer[index].source_id = source_id;
-    s_buffer[index].value     = value;
-    s_buffer[index].systick   = systick;
-    s_buffer[index].rtc_time  = rtc_time;
-    s_buffer_count            = (uint16_t)(index + 1U);
-
-    if ((s_max_priority_count == 0U) || (priority > s_max_priority))
-    {
-        s_max_priority       = priority;
-        s_max_priority_count = 1U;
-    }
-    else if (priority == s_max_priority)
-    {
-        s_max_priority_count++;
-    }
-    /* priority < s_max_priority: запись заняла место в буфере, но не
-     * учитывается в счётчике триггера сброса - см. архитектуру в logger.h */
-
-    uint8_t need_flush = (s_max_priority_count >= s_threshold[s_max_priority]) ? 1U : 0U;
-
-    logger_critical_exit(primask);
 
     if (need_flush != 0U)
     {
@@ -778,7 +853,9 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
     s_threshold[LOGGER_PRIORITY_HIGH]   = config->threshold_high;
 
     s_buffering_active    = (config->write_fn != NULL) ? 1U : 0U;
+    s_buffer_head         = 0U;
     s_buffer_count        = 0U;
+    s_high_water          = 0U;
     s_max_priority_count  = 0U;
     s_max_priority        = LOGGER_PRIORITY_LOW;
 
@@ -922,6 +999,27 @@ HAL_StatusTypeDef LOGGER_EmergencySave(void)
     {
         return HAL_OK;
     }
-    logger_flush_raw();
+    (void)logger_flush_all_raw();
     return HAL_OK;
+}
+
+/* ------------------------------------------------------------------------ */
+/*  Диагностика переполнения                                                */
+/* ------------------------------------------------------------------------ */
+
+/** @brief Сколько записей потеряно из-за переполнения - см. logger.h.
+ * @return число потерянных записей с момента старта */
+uint32_t LOGGER_GetDroppedCount(void)
+{
+    uint32_t primask = logger_critical_enter();
+    uint32_t dropped = s_dropped_count;
+    logger_critical_exit(primask);
+    return dropped;
+}
+
+/** @brief Пик заполнения буфера - см. logger.h.
+ * @return максимум одновременно лежавших в буфере записей с LOGGER_Init() */
+uint16_t LOGGER_GetBufferHighWater(void)
+{
+    return s_high_water;
 }

@@ -14,6 +14,7 @@
 
 #include "log_decoder.h"
 #include "logger_codes.h"
+#include <stdio.h>
 #include <string.h>
 
 /* ------------------------------------------------------------------------ */
@@ -96,6 +97,42 @@ bool LOGDEC_GetPriority(uint16_t code, LOGGER_Priority_t *out_priority)
     return true;
 }
 
+/** @brief Имя группы кода - см. log_decoder.h.
+ * @param  code код лога
+ * @return 8-символьное имя группы */
+const char *LOGDEC_GetGroupName(uint16_t code)
+{
+    return (code <= LOGGER_INTERNAL_CODE_MAX) ? "LOGGER  " : LOGGER_GetGroupName(code);
+}
+
+/** @brief Строка записи в формате LOGGER_FormatConsoleLine() - см. log_decoder.h.
+ * @param  buf  буфер результата
+ * @param  size размер buf
+ * @param  rec  запись
+ * @return длина полной строки без '\0' */
+size_t LOGDEC_FormatLine(char *buf, size_t size, const LOGDEC_DecodedRecord_t *rec)
+{
+    char prio = '?';
+    int  n;
+
+    if (rec == NULL)
+    {
+        return 0U;
+    }
+    switch (rec->priority)
+    {
+        case LOGGER_PRIORITY_LOW:    prio = 'L'; break;
+        case LOGGER_PRIORITY_MEDIUM: prio = 'M'; break;
+        case LOGGER_PRIORITY_HIGH:   prio = 'H'; break;
+        default: break;
+    }
+
+    n = snprintf(buf, size, "%8lu %s %c 0x%04X %04X %11ld %s",
+                 (unsigned long)rec->systick, LOGDEC_GetGroupName(rec->code), prio,
+                 (unsigned)rec->code, (unsigned)rec->source_id, (long)rec->value,
+                 (rec->description != NULL) ? rec->description : "???");
+    return (n > 0) ? (size_t)n : 0U;
+}
 /* ------------------------------------------------------------------------ */
 /*  Постфактум-статистика частоты вызовов по разобранному дампу             */
 /* ------------------------------------------------------------------------ */

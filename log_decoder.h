@@ -102,6 +102,29 @@ const char *LOGDEC_GetDescription(uint16_t code);
  */
 bool LOGDEC_GetPriority(uint16_t code, LOGGER_Priority_t *out_priority);
 
+/**
+ * @brief  Имя группы кода (старший байт) - ровно 8 символов ЗАГЛАВНЫМИ
+ *         буквами + '\0', например "USB_ETH ". Для служебных кодов
+ *         0x0000-0x00FF - "LOGGER  ". Таблица имён - в logger_codes.h
+ *         (LOGGER_GroupNames); в память/флеш имя не пишется.
+ * @param  code  код лога
+ * @retval указатель на имя; "????????", если группа неизвестна
+ */
+const char *LOGDEC_GetGroupName(uint16_t code);
+
+/**
+ * @brief  Формирует текстовую строку записи в ТОМ ЖЕ формате, что
+ *         LOGGER_FormatConsoleLine() на встраиваемой стороне (колонки
+ *         фиксированной ширины, без RTC):
+ *         "<мс,8> <ГРУППА,8> <L|M|H> 0x<код,4> <src,4> <val,11> <описание>"
+ *         БЕЗ завершающего "\r\n".
+ * @param  buf   буфер результата (может быть NULL при size == 0)
+ * @param  size  размер buf в байтах
+ * @param  rec   декодированная запись
+ * @return длина полной строки без '\0' (как у snprintf)
+ */
+size_t LOGDEC_FormatLine(char *buf, size_t size, const LOGDEC_DecodedRecord_t *rec);
+
 /* ------------------------------------------------------------------------ */
 /*  Постфактум-статистика частоты вызовов по разобранному дампу             */
 /* ------------------------------------------------------------------------ */

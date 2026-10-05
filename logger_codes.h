@@ -6,7 +6,7 @@
  *          и хостовой сторон библиотеки.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.7
+ * @version 1.11
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -295,12 +295,54 @@
 #define LOG_OFFSET_VESC_INIT_FAIL      0x01U
 #define LOG_OFFSET_VESC_REG_REJECTED   0x02U
 #define LOG_OFFSET_VESC_EXIST_TIMEOUT  0x03U
+#define LOG_OFFSET_VESC_EXIST_OK           0x04U
+#define LOG_OFFSET_VESC_CTRL_MODE          0x05U
+#define LOG_OFFSET_VESC_BR_INIT_OK         0x10U
+#define LOG_OFFSET_VESC_BR_INIT_FAIL       0x11U
+#define LOG_OFFSET_VESC_BR_MCCONF_READ     0x12U
+#define LOG_OFFSET_VESC_BR_MCCONF_WRITE    0x13U
+#define LOG_OFFSET_VESC_BR_APPCONF_READ    0x14U
+#define LOG_OFFSET_VESC_BR_APPCONF_WRITE   0x15U
+#define LOG_OFFSET_VESC_BR_FW_BOOTLOADER   0x16U
+#define LOG_OFFSET_VESC_BR_FW_ERASE        0x17U
+#define LOG_OFFSET_VESC_BR_FW_WRITE        0x18U
+#define LOG_OFFSET_VESC_BR_FW_ERROR        0x19U
+#define LOG_OFFSET_VESC_BR_SCAN_START      0x1AU
+#define LOG_OFFSET_VESC_BR_SCAN_FOUND      0x1BU
+#define LOG_OFFSET_VESC_BR_SCAN_DONE       0x1CU
+#define LOG_OFFSET_VESC_BR_REPLY_TIMEOUT   0x1DU
+#define LOG_OFFSET_VESC_BR_QUEUE_OVERFLOW  0x1EU
+#define LOG_OFFSET_VESC_BR_RX_ERROR        0x1FU
+#define LOG_OFFSET_VESC_BR_RX_TIMEOUT      0x20U
+#define LOG_OFFSET_VESC_BR_CAN_CRC_ERROR   0x21U
+#define LOG_OFFSET_VESC_BR_FAULT           0x22U
 
 /* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом motor_vesc. */
 #define LOG_CODE_VESC_INIT_OK       ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_INIT_OK))
 #define LOG_CODE_VESC_INIT_FAIL     ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_INIT_FAIL))
 #define LOG_CODE_VESC_REG_REJECTED  ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_REG_REJECTED))
 #define LOG_CODE_VESC_EXIST_TIMEOUT ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_EXIST_TIMEOUT))
+#define LOG_CODE_VESC_EXIST_OK           ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_EXIST_OK))
+#define LOG_CODE_VESC_CTRL_MODE          ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_CTRL_MODE))
+#define LOG_CODE_VESC_BR_INIT_OK         ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_INIT_OK))
+#define LOG_CODE_VESC_BR_INIT_FAIL       ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_INIT_FAIL))
+#define LOG_CODE_VESC_BR_MCCONF_READ     ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_MCCONF_READ))
+#define LOG_CODE_VESC_BR_MCCONF_WRITE    ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_MCCONF_WRITE))
+#define LOG_CODE_VESC_BR_APPCONF_READ    ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_APPCONF_READ))
+#define LOG_CODE_VESC_BR_APPCONF_WRITE   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_APPCONF_WRITE))
+#define LOG_CODE_VESC_BR_FW_BOOTLOADER   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FW_BOOTLOADER))
+#define LOG_CODE_VESC_BR_FW_ERASE        ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FW_ERASE))
+#define LOG_CODE_VESC_BR_FW_WRITE        ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FW_WRITE))
+#define LOG_CODE_VESC_BR_FW_ERROR        ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FW_ERROR))
+#define LOG_CODE_VESC_BR_SCAN_START      ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_SCAN_START))
+#define LOG_CODE_VESC_BR_SCAN_FOUND      ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_SCAN_FOUND))
+#define LOG_CODE_VESC_BR_SCAN_DONE       ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_SCAN_DONE))
+#define LOG_CODE_VESC_BR_REPLY_TIMEOUT   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_REPLY_TIMEOUT))
+#define LOG_CODE_VESC_BR_QUEUE_OVERFLOW  ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_QUEUE_OVERFLOW))
+#define LOG_CODE_VESC_BR_RX_ERROR        ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_RX_ERROR))
+#define LOG_CODE_VESC_BR_RX_TIMEOUT      ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_RX_TIMEOUT))
+#define LOG_CODE_VESC_BR_CAN_CRC_ERROR   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_CAN_CRC_ERROR))
+#define LOG_CODE_VESC_BR_FAULT           ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FAULT))
 #endif /* LOGGER_ENABLE_VESC */
 
 #ifdef LOGGER_ENABLE_BISS_IRS
@@ -354,8 +396,8 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  СИСТЕМА / внутренние алгоритмы (0x00xx-0x3Fxx).                    */
     /*  ПРИМЕР - замените на реальные коды логов своего проекта.          */
     /* ------------------------------------------------------------------ */
-    { LOG_CODE_SYSTEM_START,     LOGGER_PRIORITY_LOW,  "Система: штатный старт" },
-    { LOG_CODE_SYSTEM_HAL_ERROR, LOGGER_PRIORITY_HIGH, "Система: сбой инициализации HAL" },
+    { LOG_CODE_SYSTEM_START,     LOGGER_PRIORITY_LOW,  "штатный старт" },
+    { LOG_CODE_SYSTEM_HAL_ERROR, LOGGER_PRIORITY_HIGH, "сбой инициализации HAL" },
 
     /* ------------------------------------------------------------------ */
     /*  ПЕРИФЕРИЯ, интерфейсы МК (0x40xx-0x7Fxx).                          */
@@ -364,13 +406,13 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_CANMGR" до #include "logger_codes.h".       */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_CANMGR
-    { LOG_CODE_CANMGR_INIT_OK,       LOGGER_PRIORITY_LOW,    "can_manager: Init - шина инициализирована" },
-    { LOG_CODE_CANMGR_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "can_manager: Init - ошибка конфига/пула/HAL" },
-    { LOG_CODE_CANMGR_REG_REJECTED,  LOGGER_PRIORITY_MEDIUM, "can_manager: фильтр отклонён" },
-    { LOG_CODE_CANMGR_TX_QUEUE_FULL, LOGGER_PRIORITY_HIGH,   "can_manager: очередь отправки полна" },
-    { LOG_CODE_CANMGR_RX_OVERFLOW,   LOGGER_PRIORITY_MEDIUM, "can_manager: переполнение Rx FIFO0" },
-    { LOG_CODE_CANMGR_BUS_OFF,       LOGGER_PRIORITY_HIGH,   "can_manager: Bus-Off, автовосстановлен" },
-    { LOG_CODE_CANMGR_NO_AUTORETRANS, LOGGER_PRIORITY_MEDIUM, "can_manager: AutoRetransmission отключен (DAR/NART)" },
+    { LOG_CODE_CANMGR_INIT_OK,       LOGGER_PRIORITY_LOW,    "Init - шина инициализирована" },
+    { LOG_CODE_CANMGR_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "Init - ошибка конфига/пула/HAL" },
+    { LOG_CODE_CANMGR_REG_REJECTED,  LOGGER_PRIORITY_MEDIUM, "фильтр отклонён" },
+    { LOG_CODE_CANMGR_TX_QUEUE_FULL, LOGGER_PRIORITY_HIGH,   "очередь отправки полна" },
+    { LOG_CODE_CANMGR_RX_OVERFLOW,   LOGGER_PRIORITY_MEDIUM, "переполнение Rx FIFO0" },
+    { LOG_CODE_CANMGR_BUS_OFF,       LOGGER_PRIORITY_HIGH,   "Bus-Off, автовосстановлен" },
+    { LOG_CODE_CANMGR_NO_AUTORETRANS, LOGGER_PRIORITY_MEDIUM, "AutoRetransmission отключен (DAR/NART)" },
 #endif /* LOGGER_ENABLE_CANMGR */
 
     /* ------------------------------------------------------------------ */
@@ -379,22 +421,22 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_USB_ETH" до #include "logger_codes.h".     */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_USB_ETH
-    { LOG_CODE_USB_ETH_INIT_OK,       LOGGER_PRIORITY_LOW,    "USB_ETH: инициализация выполнена" },
-    { LOG_CODE_USB_ETH_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "USB_ETH: ошибка инициализации" },
-    { LOG_CODE_USB_ETH_USB_MOUNTED,   LOGGER_PRIORITY_LOW,    "USB_ETH: USB подключён к хосту" },
-    { LOG_CODE_USB_ETH_USB_UNMOUNTED, LOGGER_PRIORITY_MEDIUM, "USB_ETH: USB отключён от хоста" },
-    { LOG_CODE_USB_ETH_NET_UP,        LOGGER_PRIORITY_LOW,    "USB_ETH: сеть готова, IP назначен" },
-    { LOG_CODE_USB_ETH_NET_DOWN,      LOGGER_PRIORITY_MEDIUM, "USB_ETH: сеть потеряна" },
-    { LOG_CODE_USB_ETH_DHCP_TIMEOUT,  LOGGER_PRIORITY_MEDIUM, "USB_ETH: DHCP-клиент не получил адрес" },
-    { LOG_CODE_USB_ETH_TCP_ACCEPT,    LOGGER_PRIORITY_LOW,    "USB_ETH: TCP-клиент подключился" },
-    { LOG_CODE_USB_ETH_TCP_CLOSED,    LOGGER_PRIORITY_LOW,    "USB_ETH: TCP-соединение закрыто" },
-    { LOG_CODE_USB_ETH_TCP_POOL_FULL, LOGGER_PRIORITY_HIGH,   "USB_ETH: нет свободных слотов TCP, отказ" },
-    { LOG_CODE_USB_ETH_TCP_ERROR,     LOGGER_PRIORITY_MEDIUM, "USB_ETH: TCP-соединение сброшено/ошибка" },
-    { LOG_CODE_USB_ETH_RX_DROP,       LOGGER_PRIORITY_MEDIUM, "USB_ETH: входящий кадр отброшен (нет памяти)" },
-    { LOG_CODE_USB_ETH_TX_TIMEOUT,    LOGGER_PRIORITY_MEDIUM, "USB_ETH: таймаут передачи по USB, кадр отброшен" },
-    { LOG_CODE_USB_ETH_SEND_NO_MEM,   LOGGER_PRIORITY_MEDIUM, "USB_ETH: нет памяти lwIP для отправки" },
-    { LOG_CODE_USB_ETH_LISTEN_FAIL,   LOGGER_PRIORITY_HIGH,   "USB_ETH: не удалось открыть TCP-порт" },
-    { LOG_CODE_USB_ETH_UDP_BIND_FAIL, LOGGER_PRIORITY_HIGH,   "USB_ETH: не удалось открыть UDP-порт" },
+    { LOG_CODE_USB_ETH_INIT_OK,       LOGGER_PRIORITY_LOW,    "инициализация выполнена" },
+    { LOG_CODE_USB_ETH_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "ошибка инициализации" },
+    { LOG_CODE_USB_ETH_USB_MOUNTED,   LOGGER_PRIORITY_LOW,    "USB подключён к хосту" },
+    { LOG_CODE_USB_ETH_USB_UNMOUNTED, LOGGER_PRIORITY_MEDIUM, "USB отключён от хоста" },
+    { LOG_CODE_USB_ETH_NET_UP,        LOGGER_PRIORITY_LOW,    "сеть готова, IP назначен" },
+    { LOG_CODE_USB_ETH_NET_DOWN,      LOGGER_PRIORITY_MEDIUM, "сеть потеряна" },
+    { LOG_CODE_USB_ETH_DHCP_TIMEOUT,  LOGGER_PRIORITY_MEDIUM, "DHCP-клиент не получил адрес" },
+    { LOG_CODE_USB_ETH_TCP_ACCEPT,    LOGGER_PRIORITY_LOW,    "TCP-клиент подключился" },
+    { LOG_CODE_USB_ETH_TCP_CLOSED,    LOGGER_PRIORITY_LOW,    "TCP-соединение закрыто" },
+    { LOG_CODE_USB_ETH_TCP_POOL_FULL, LOGGER_PRIORITY_HIGH,   "нет свободных слотов TCP, отказ" },
+    { LOG_CODE_USB_ETH_TCP_ERROR,     LOGGER_PRIORITY_MEDIUM, "TCP-соединение сброшено/ошибка" },
+    { LOG_CODE_USB_ETH_RX_DROP,       LOGGER_PRIORITY_MEDIUM, "RX кадр отброшен (нет памяти)" },
+    { LOG_CODE_USB_ETH_TX_TIMEOUT,    LOGGER_PRIORITY_MEDIUM, "таймаут TX, кадр отброшен" },
+    { LOG_CODE_USB_ETH_SEND_NO_MEM,   LOGGER_PRIORITY_MEDIUM, "нет памяти lwIP для отправки" },
+    { LOG_CODE_USB_ETH_LISTEN_FAIL,   LOGGER_PRIORITY_HIGH,   "не удалось открыть TCP-порт" },
+    { LOG_CODE_USB_ETH_UDP_BIND_FAIL, LOGGER_PRIORITY_HIGH,   "не удалось открыть UDP-порт" },
 #endif /* LOGGER_ENABLE_USB_ETH */
 
     /* ------------------------------------------------------------------ */
@@ -403,17 +445,17 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_USB_DEV" до #include "logger_codes.h".      */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_USB_DEV
-    { LOG_CODE_USB_DEV_USB_START_FAIL,   LOGGER_PRIORITY_HIGH,   "usb_dev: TinyUSB не запустился" },
-    { LOG_CODE_USB_DEV_INIT_REFUSED,     LOGGER_PRIORITY_HIGH,   "usb_dev: Init отклонён - нет точек сети+COM" },
-    { LOG_CODE_USB_DEV_USB_CONNECTED,    LOGGER_PRIORITY_LOW,    "usb_dev: подключено к ПК" },
-    { LOG_CODE_USB_DEV_USB_DISCONNECTED, LOGGER_PRIORITY_MEDIUM, "usb_dev: отключено от ПК (кабель/сон ПК)" },
-    { LOG_CODE_USB_DEV_REENUM,           LOGGER_PRIORITY_LOW,    "usb_dev: смена набора устройств (re-enum)" },
-    { LOG_CODE_USB_DEV_COM_INIT,         LOGGER_PRIORITY_LOW,    "usb_com: COM-порт включён" },
-    { LOG_CODE_USB_DEV_COM_DEINIT,       LOGGER_PRIORITY_LOW,    "usb_com: COM-порт выключен" },
-    { LOG_CODE_USB_DEV_COM_OPEN,         LOGGER_PRIORITY_LOW,    "usb_com: порт открыт на ПК (DTR)" },
-    { LOG_CODE_USB_DEV_COM_CLOSE,        LOGGER_PRIORITY_LOW,    "usb_com: порт закрыт на ПК" },
-    { LOG_CODE_USB_DEV_COM_TX_BUSY,      LOGGER_PRIORITY_MEDIUM, "usb_com: TX отклонён - буфер полон" },
-    { LOG_CODE_USB_DEV_ETH_DEINIT,       LOGGER_PRIORITY_LOW,    "usb_eth: сеть выключена (DeInit)" },
+    { LOG_CODE_USB_DEV_USB_START_FAIL,   LOGGER_PRIORITY_HIGH,   "TinyUSB не запустился" },
+    { LOG_CODE_USB_DEV_INIT_REFUSED,     LOGGER_PRIORITY_HIGH,   "Init отклонён - нет точек сети+COM" },
+    { LOG_CODE_USB_DEV_USB_CONNECTED,    LOGGER_PRIORITY_LOW,    "подключено к ПК" },
+    { LOG_CODE_USB_DEV_USB_DISCONNECTED, LOGGER_PRIORITY_MEDIUM, "отключено от ПК (кабель/сон ПК)" },
+    { LOG_CODE_USB_DEV_REENUM,           LOGGER_PRIORITY_LOW,    "смена набора устройств (re-enum)" },
+    { LOG_CODE_USB_DEV_COM_INIT,         LOGGER_PRIORITY_LOW,    "COM: включён" },
+    { LOG_CODE_USB_DEV_COM_DEINIT,       LOGGER_PRIORITY_LOW,    "COM: выключен" },
+    { LOG_CODE_USB_DEV_COM_OPEN,         LOGGER_PRIORITY_LOW,    "COM: порт открыт на ПК (DTR)" },
+    { LOG_CODE_USB_DEV_COM_CLOSE,        LOGGER_PRIORITY_LOW,    "COM: порт закрыт на ПК" },
+    { LOG_CODE_USB_DEV_COM_TX_BUSY,      LOGGER_PRIORITY_MEDIUM, "COM: TX отклонён - буфер полон" },
+    { LOG_CODE_USB_DEV_ETH_DEINIT,       LOGGER_PRIORITY_LOW,    "ETH: сеть выключена (DeInit)" },
 #endif /* LOGGER_ENABLE_USB_DEV */
 
     /* ------------------------------------------------------------------ */
@@ -423,17 +465,17 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_LOAD_PWM" до #include "logger_codes.h".     */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_LOAD_PWM
-    { LOG_CODE_LOAD_PWM_INIT_BAD_CONFIG,    LOGGER_PRIORITY_HIGH,   "LOAD_PWM: Init - неверная конфигурация" },
-    { LOG_CODE_LOAD_PWM_INIT_POOL_FULL,     LOGGER_PRIORITY_HIGH,   "LOAD_PWM: Init - пул нагрузок исчерпан" },
-    { LOG_CODE_LOAD_PWM_INIT_LED_POOL_FULL, LOGGER_PRIORITY_HIGH,   "LOAD_PWM: пул LED-таблиц гаммы исчерпан" },
-    { LOG_CODE_LOAD_PWM_INIT_HAL_START_FAIL, LOGGER_PRIORITY_HIGH,  "LOAD_PWM: Init - HAL_TIM_PWM_Start() вернул ошибку" },
-    { LOG_CODE_LOAD_PWM_INIT_OK,             LOGGER_PRIORITY_LOW,   "LOAD_PWM: нагрузка зарегистрирована" },
-    { LOG_CODE_LOAD_PWM_CYCLE_START,         LOGGER_PRIORITY_LOW,   "LOAD_PWM: Start - запуск цикла" },
-    { LOG_CODE_LOAD_PWM_CYCLE_DONE,          LOGGER_PRIORITY_MEDIUM, "LOAD_PWM: Tick - oneshot-цикл завершён" },
-    { LOG_CODE_LOAD_PWM_STOP,                LOGGER_PRIORITY_LOW,   "LOAD_PWM: Stop - остановка одной нагрузки" },
-    { LOG_CODE_LOAD_PWM_STOP_ALL,            LOGGER_PRIORITY_MEDIUM, "LOAD_PWM: StopAll - массовая остановка" },
-    { LOG_CODE_LOAD_PWM_NULL_HANDLE,         LOGGER_PRIORITY_HIGH,  "LOAD_PWM: вызов с h == NULL" },
-    { LOG_CODE_LOAD_PWM_GLOBAL_BRIGHTNESS,   LOGGER_PRIORITY_LOW,   "LOAD_PWM: SetGlobalBrightness - смена яркости" },
+    { LOG_CODE_LOAD_PWM_INIT_BAD_CONFIG,    LOGGER_PRIORITY_HIGH,   "Init - неверная конфигурация" },
+    { LOG_CODE_LOAD_PWM_INIT_POOL_FULL,     LOGGER_PRIORITY_HIGH,   "Init - пул нагрузок исчерпан" },
+    { LOG_CODE_LOAD_PWM_INIT_LED_POOL_FULL, LOGGER_PRIORITY_HIGH,   "пул LED-таблиц гаммы исчерпан" },
+    { LOG_CODE_LOAD_PWM_INIT_HAL_START_FAIL, LOGGER_PRIORITY_HIGH,  "Init - HAL_TIM_PWM_Start() вернул ошибку" },
+    { LOG_CODE_LOAD_PWM_INIT_OK,             LOGGER_PRIORITY_LOW,   "нагрузка зарегистрирована" },
+    { LOG_CODE_LOAD_PWM_CYCLE_START,         LOGGER_PRIORITY_LOW,   "Start - запуск цикла" },
+    { LOG_CODE_LOAD_PWM_CYCLE_DONE,          LOGGER_PRIORITY_MEDIUM, "Tick - oneshot-цикл завершён" },
+    { LOG_CODE_LOAD_PWM_STOP,                LOGGER_PRIORITY_LOW,   "Stop - остановка одной нагрузки" },
+    { LOG_CODE_LOAD_PWM_STOP_ALL,            LOGGER_PRIORITY_MEDIUM, "StopAll - массовая остановка" },
+    { LOG_CODE_LOAD_PWM_NULL_HANDLE,         LOGGER_PRIORITY_HIGH,  "вызов с h == NULL" },
+    { LOG_CODE_LOAD_PWM_GLOBAL_BRIGHTNESS,   LOGGER_PRIORITY_LOW,   "SetGlobalBrightness - смена яркости" },
 #endif /* LOGGER_ENABLE_LOAD_PWM */
 
     /* ------------------------------------------------------------------ */
@@ -442,12 +484,12 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_RC_BUS" до #include "logger_codes.h".       */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_RC_BUS
-    { LOG_CODE_RC_BUS_INIT_FAIL,              LOGGER_PRIORITY_HIGH,   "rc_bus: Init - конфигурация отклонена" },
-    { LOG_CODE_RC_BUS_UART_ERROR,             LOGGER_PRIORITY_MEDIUM, "rc_bus: ошибка приёма на линии каналов" },
-    { LOG_CODE_RC_BUS_FRAME_ERROR,            LOGGER_PRIORITY_LOW,    "rc_bus: битый кадр каналов" },
-    { LOG_CODE_RC_BUS_TELEMETRY_INIT_FAIL,    LOGGER_PRIORITY_HIGH,   "rc_bus: TelemetryInit отклонён" },
-    { LOG_CODE_RC_BUS_TELEMETRY_UART_ERROR,   LOGGER_PRIORITY_MEDIUM, "rc_bus: ошибка приёма на шине датчиков" },
-    { LOG_CODE_RC_BUS_TELEMETRY_FRAME_ERROR,  LOGGER_PRIORITY_LOW,    "rc_bus: битый кадр шины датчиков" },
+    { LOG_CODE_RC_BUS_INIT_FAIL,              LOGGER_PRIORITY_HIGH,   "Init - конфигурация отклонена" },
+    { LOG_CODE_RC_BUS_UART_ERROR,             LOGGER_PRIORITY_MEDIUM, "ошибка приёма на линии каналов" },
+    { LOG_CODE_RC_BUS_FRAME_ERROR,            LOGGER_PRIORITY_LOW,    "битый кадр каналов" },
+    { LOG_CODE_RC_BUS_TELEMETRY_INIT_FAIL,    LOGGER_PRIORITY_HIGH,   "TelemetryInit отклонён" },
+    { LOG_CODE_RC_BUS_TELEMETRY_UART_ERROR,   LOGGER_PRIORITY_MEDIUM, "ошибка приёма на шине датчиков" },
+    { LOG_CODE_RC_BUS_TELEMETRY_FRAME_ERROR,  LOGGER_PRIORITY_LOW,    "битый кадр шины датчиков" },
 #endif /* LOGGER_ENABLE_RC_BUS */
 
     /* ------------------------------------------------------------------ */
@@ -456,14 +498,14 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_VESC_SERVO" до #include "logger_codes.h".   */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_VESC_SERVO
-    { LOG_CODE_VESC_SERVO_INIT_BAD_CONFIG, LOGGER_PRIORITY_HIGH, "vesc_servo: Init - конфигурация отклонена" },
-    { LOG_CODE_VESC_SERVO_INIT_POOL_FULL,  LOGGER_PRIORITY_HIGH, "vesc_servo: Init - пул серв исчерпан" },
-    { LOG_CODE_VESC_SERVO_INIT_VESC_FAIL,  LOGGER_PRIORITY_HIGH, "vesc_servo: Init - VESC_CAN_Init() вернул ошибку" },
-    { LOG_CODE_VESC_SERVO_INIT_DUPLICATE,  LOGGER_PRIORITY_HIGH, "vesc_servo: веска уже занята сервой" },
-    { LOG_CODE_VESC_SERVO_INIT_OK,         LOGGER_PRIORITY_LOW,  "vesc_servo: серва зарегистрирована" },
-    { LOG_CODE_VESC_SERVO_FAULT_ENTERED,   LOGGER_PRIORITY_HIGH, "vesc_servo: переход в FAULT" },
-    { LOG_CODE_VESC_SERVO_HOMING_START,    LOGGER_PRIORITY_LOW,  "vesc_servo: StartHoming - хоуминг запущен" },
-    { LOG_CODE_VESC_SERVO_HOMING_DONE,     LOGGER_PRIORITY_LOW,  "vesc_servo: хоуминг успешно завершён" },
+    { LOG_CODE_VESC_SERVO_INIT_BAD_CONFIG, LOGGER_PRIORITY_HIGH, "Init - конфигурация отклонена" },
+    { LOG_CODE_VESC_SERVO_INIT_POOL_FULL,  LOGGER_PRIORITY_HIGH, "Init - пул серв исчерпан" },
+    { LOG_CODE_VESC_SERVO_INIT_VESC_FAIL,  LOGGER_PRIORITY_HIGH, "Init - VESC_CAN_Init() вернул ошибку" },
+    { LOG_CODE_VESC_SERVO_INIT_DUPLICATE,  LOGGER_PRIORITY_HIGH, "веска уже занята сервой" },
+    { LOG_CODE_VESC_SERVO_INIT_OK,         LOGGER_PRIORITY_LOW,  "серва зарегистрирована" },
+    { LOG_CODE_VESC_SERVO_FAULT_ENTERED,   LOGGER_PRIORITY_HIGH, "переход в FAULT" },
+    { LOG_CODE_VESC_SERVO_HOMING_START,    LOGGER_PRIORITY_LOW,  "StartHoming - хоуминг запущен" },
+    { LOG_CODE_VESC_SERVO_HOMING_DONE,     LOGGER_PRIORITY_LOW,  "хоуминг успешно завершён" },
 #endif /* LOGGER_ENABLE_VESC_SERVO */
 
     /* ------------------------------------------------------------------ */
@@ -472,10 +514,31 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_VESC" до #include "logger_codes.h".        */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_VESC
-    { LOG_CODE_VESC_INIT_OK,       LOGGER_PRIORITY_LOW,    "motor_vesc: Init - веска зарегистрирована" },
-    { LOG_CODE_VESC_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "motor_vesc: конфиг/пул/фильтр отклонён" },
-    { LOG_CODE_VESC_REG_REJECTED,  LOGGER_PRIORITY_MEDIUM, "motor_vesc: статус отклонён" },
-    { LOG_CODE_VESC_EXIST_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "motor_vesc: RequestExists - таймаут ответа PONG" },
+    { LOG_CODE_VESC_INIT_OK,       LOGGER_PRIORITY_LOW,    "Init - веска зарегистрирована" },
+    { LOG_CODE_VESC_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "конфиг/пул/фильтр отклонён" },
+    { LOG_CODE_VESC_REG_REJECTED,  LOGGER_PRIORITY_MEDIUM, "статус отклонён" },
+    { LOG_CODE_VESC_EXIST_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "RequestExists - таймаут ответа PONG" },
+    { LOG_CODE_VESC_EXIST_OK, LOGGER_PRIORITY_LOW, "веска ответила PONG" },
+    { LOG_CODE_VESC_CTRL_MODE, LOGGER_PRIORITY_LOW, "смена режима (value=1..10)" },
+    { LOG_CODE_VESC_BR_INIT_OK, LOGGER_PRIORITY_LOW, "bridge: Init - мост создан" },
+    { LOG_CODE_VESC_BR_INIT_FAIL, LOGGER_PRIORITY_HIGH, "bridge: Init - отказ (пул/фильтр)" },
+    { LOG_CODE_VESC_BR_MCCONF_READ, LOGGER_PRIORITY_LOW, "bridge: чтение MCCONF (value=размер)" },
+    { LOG_CODE_VESC_BR_MCCONF_WRITE, LOGGER_PRIORITY_LOW, "bridge: запись MCCONF вески" },
+    { LOG_CODE_VESC_BR_APPCONF_READ, LOGGER_PRIORITY_LOW, "bridge: чтение APPCONF" },
+    { LOG_CODE_VESC_BR_APPCONF_WRITE, LOGGER_PRIORITY_LOW, "bridge: запись APPCONF" },
+    { LOG_CODE_VESC_BR_FW_BOOTLOADER, LOGGER_PRIORITY_MEDIUM, "bridge: JUMP_TO_BOOTLOADER вески" },
+    { LOG_CODE_VESC_BR_FW_ERASE, LOGGER_PRIORITY_MEDIUM, "bridge: ERASE_NEW_APP (старт обновления)" },
+    { LOG_CODE_VESC_BR_FW_WRITE, LOGGER_PRIORITY_LOW, "bridge: запись прошивки (value=байты)" },
+    { LOG_CODE_VESC_BR_FW_ERROR, LOGGER_PRIORITY_HIGH, "bridge: ошибка вески при обновлении" },
+    { LOG_CODE_VESC_BR_SCAN_START, LOGGER_PRIORITY_LOW, "bridge: скан CAN начат" },
+    { LOG_CODE_VESC_BR_SCAN_FOUND, LOGGER_PRIORITY_LOW, "bridge: скан CAN - найдена веска (src=id)" },
+    { LOG_CODE_VESC_BR_SCAN_DONE, LOGGER_PRIORITY_LOW, "bridge: скан CAN готов (value=число)" },
+    { LOG_CODE_VESC_BR_REPLY_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "bridge: нет ответа вески (value=COMM-код)" },
+    { LOG_CODE_VESC_BR_QUEUE_OVERFLOW, LOGGER_PRIORITY_HIGH, "bridge: очередь форвардинга полна" },
+    { LOG_CODE_VESC_BR_RX_ERROR, LOGGER_PRIORITY_MEDIUM, "bridge: ошибка CRC/STOP пакета клиента" },
+    { LOG_CODE_VESC_BR_RX_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "bridge: оборван пакет клиента" },
+    { LOG_CODE_VESC_BR_CAN_CRC_ERROR, LOGGER_PRIORITY_MEDIUM, "bridge: ошибка CRC ответа вески по CAN" },
+    { LOG_CODE_VESC_BR_FAULT, LOGGER_PRIORITY_HIGH, "bridge: fault вески изменился (value=код)" },
 #endif /* LOGGER_ENABLE_VESC */
 
     /* ------------------------------------------------------------------ */
@@ -484,13 +547,13 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_BISS_IRS" до #include "logger_codes.h".     */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_BISS_IRS
-    { LOG_CODE_BISS_IRS_INIT_BAD_CONFIG,    LOGGER_PRIORITY_HIGH,   "BISS_IRS: Init - неверная конфигурация" },
-    { LOG_CODE_BISS_IRS_INIT_POOL_FULL,     LOGGER_PRIORITY_HIGH,   "BISS_IRS: Init - пул энкодеров исчерпан" },
-    { LOG_CODE_BISS_IRS_INIT_CLOCK_RANGE,   LOGGER_PRIORITY_HIGH,   "BISS_IRS: клок недостижим на этом ядре" },
-    { LOG_CODE_BISS_IRS_INIT_OK,            LOGGER_PRIORITY_LOW,    "BISS_IRS: Init - энкодер зарегистрирован" },
-    { LOG_CODE_BISS_IRS_POLL_ACK_TIMEOUT,   LOGGER_PRIORITY_MEDIUM, "BISS_IRS: Poll - тайм-аут ожидания ACK" },
-    { LOG_CODE_BISS_IRS_POLL_FRAME_INVALID, LOGGER_PRIORITY_MEDIUM, "BISS_IRS: кадр невалиден (CRC/ERR/WARN)" },
-    { LOG_CODE_BISS_IRS_ZERO_HERE_REJECTED, LOGGER_PRIORITY_LOW,    "BISS_IRS: нет данных для калибровки" },
+    { LOG_CODE_BISS_IRS_INIT_BAD_CONFIG,    LOGGER_PRIORITY_HIGH,   "Init - неверная конфигурация" },
+    { LOG_CODE_BISS_IRS_INIT_POOL_FULL,     LOGGER_PRIORITY_HIGH,   "Init - пул энкодеров исчерпан" },
+    { LOG_CODE_BISS_IRS_INIT_CLOCK_RANGE,   LOGGER_PRIORITY_HIGH,   "клок недостижим на этом ядре" },
+    { LOG_CODE_BISS_IRS_INIT_OK,            LOGGER_PRIORITY_LOW,    "Init - энкодер зарегистрирован" },
+    { LOG_CODE_BISS_IRS_POLL_ACK_TIMEOUT,   LOGGER_PRIORITY_MEDIUM, "Poll - тайм-аут ожидания ACK" },
+    { LOG_CODE_BISS_IRS_POLL_FRAME_INVALID, LOGGER_PRIORITY_MEDIUM, "кадр невалиден (CRC/ERR/WARN)" },
+    { LOG_CODE_BISS_IRS_ZERO_HERE_REJECTED, LOGGER_PRIORITY_LOW,    "нет данных для калибровки" },
 #endif /* LOGGER_ENABLE_BISS_IRS */
 
     /* ------------------------------------------------------------------ */
@@ -499,14 +562,81 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /*  "#define LOGGER_ENABLE_LSM6DSX" до #include "logger_codes.h".      */
     /* ------------------------------------------------------------------ */
 #ifdef LOGGER_ENABLE_LSM6DSX
-    { LOG_CODE_LSM6DSX_INIT_OK,          LOGGER_PRIORITY_LOW,  "LSM6DSx: инициализирован" },
-    { LOG_CODE_LSM6DSX_INIT_FAIL_WHOAMI, LOGGER_PRIORITY_HIGH, "LSM6DSx: WHO_AM_I не совпал" },
-    { LOG_CODE_LSM6DSX_BUS_ERROR,        LOGGER_PRIORITY_HIGH, "LSM6DSx: ошибка шины SPI/I2C" },
-    { LOG_CODE_LSM6DSX_POOL_EXHAUSTED,   LOGGER_PRIORITY_HIGH, "LSM6DSx: пул экземпляров исчерпан" },
+    { LOG_CODE_LSM6DSX_INIT_OK,          LOGGER_PRIORITY_LOW,  "инициализирован" },
+    { LOG_CODE_LSM6DSX_INIT_FAIL_WHOAMI, LOGGER_PRIORITY_HIGH, "WHO_AM_I не совпал" },
+    { LOG_CODE_LSM6DSX_BUS_ERROR,        LOGGER_PRIORITY_HIGH, "ошибка шины SPI/I2C" },
+    { LOG_CODE_LSM6DSX_POOL_EXHAUSTED,   LOGGER_PRIORITY_HIGH, "пул экземпляров исчерпан" },
 #endif /* LOGGER_ENABLE_LSM6DSX */
 };
 
 /** Количество записей в LOGGER_LogTable - используется LOGGER_Init(). */
 #define LOGGER_LOG_TABLE_SIZE ((uint32_t)(sizeof(LOGGER_LogTable) / sizeof(LOGGER_LogTable[0])))
 
+/* ------------------------------------------------------------------------ */
+/*  Имена групп кодов (для текстового вывода) - таблица "адрес -> имя".     */
+/*  Имя - РОВНО 8 символов ЗАГЛАВНЫМИ буквами (короткие добиты пробелами    */
+/*  справа). В память/флеш не пишется: группа определяется старшим байтом   */
+/*  кода. Группы, не входящие в библиотеку (загрузчик, проект), добавляются  */
+/*  через LOGGER_EXTRA_GROUP_NAMES до #include "logger_codes.h", например:  */
+/*      #define LOGGER_EXTRA_GROUP_NAMES { 0x02U, "BOOTLDR " },             */
+/* ------------------------------------------------------------------------ */
+
+typedef struct
+{
+    uint8_t addr;      /**< старший байт кода (LOG_ADDR_*) */
+    char    name[9];   /**< ровно 8 символов + '\0' */
+} LOGGER_GroupName_t;
+
+static const LOGGER_GroupName_t LOGGER_GroupNames[] =
+{
+    { 0x00U, "LOGGER  " },
+    { LOG_ADDR_SYSTEM, "SYSTEM  " },
+#ifdef LOGGER_ENABLE_CANMGR
+    { LOG_ADDR_CANMGR, "CAN_MGR " },
+#endif
+#ifdef LOGGER_ENABLE_USB_ETH
+    { LOG_ADDR_USB_ETH, "USB_ETH " },
+#endif
+#ifdef LOGGER_ENABLE_USB_DEV
+    { LOG_ADDR_USB_DEV, "USB_DEV " },
+#endif
+#ifdef LOGGER_ENABLE_LOAD_PWM
+    { LOG_ADDR_LOAD_PWM, "LOAD_PWM" },
+#endif
+#ifdef LOGGER_ENABLE_RC_BUS
+    { LOG_ADDR_RC_BUS, "RC_BUS  " },
+#endif
+#ifdef LOGGER_ENABLE_VESC_SERVO
+    { LOG_ADDR_VESC_SERVO, "VESC_SRV" },
+#endif
+#ifdef LOGGER_ENABLE_VESC
+    { LOG_ADDR_VESC, "VESC    " },
+#endif
+#ifdef LOGGER_ENABLE_BISS_IRS
+    { LOG_ADDR_BISS_IRS, "BISS_IRS" },
+#endif
+#ifdef LOGGER_ENABLE_LSM6DSX
+    { LOG_ADDR_LSM6DSX, "LSM6DSX " },
+#endif
+#ifdef LOGGER_EXTRA_GROUP_NAMES
+    LOGGER_EXTRA_GROUP_NAMES
+#endif
+};
+
+/** @brief Имя группы по коду лога (8 символов + '\0').
+ * @param  code код лога (старший байт - адрес группы)
+ * @return указатель на имя; "????????", если группа не в таблице */
+static inline const char *LOGGER_GetGroupName(uint16_t code)
+{
+    uint8_t addr = (uint8_t)(code >> 8);
+
+    for (uint32_t i = 0U; i < (uint32_t)(sizeof(LOGGER_GroupNames) / sizeof(LOGGER_GroupNames[0])); i++)
+    {
+        if (LOGGER_GroupNames[i].addr == addr)
+        {
+            return LOGGER_GroupNames[i].name;
+        }
+    }
+    return "????????";
+}
 #endif /* LOGGER_CODES_H */

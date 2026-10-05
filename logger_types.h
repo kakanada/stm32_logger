@@ -119,11 +119,11 @@ typedef struct
  *  конфликту символов на этапе линковки. */
 static const LOGGER_LogEntry_t LOGGER_InternalTable[] =
 {
-    { LOGGER_INTERNAL_CODE_INIT,            LOGGER_PRIORITY_LOW,  "LOGGER: инициализация выполнена" },
-    { LOGGER_INTERNAL_CODE_FLUSH,           LOGGER_PRIORITY_LOW,  "LOGGER: буфер сброшен в память" },
-    { LOGGER_INTERNAL_CODE_MARK,            LOGGER_PRIORITY_LOW,  "LOGGER: временная метка" },
-    { LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, LOGGER_PRIORITY_HIGH, "LOGGER: буфер полон, запись отброшена" },
-    { LOGGER_INTERNAL_CODE_INIT_FAIL,       LOGGER_PRIORITY_HIGH, "LOGGER: Init отклонён, см. src/val" },
+    { LOGGER_INTERNAL_CODE_INIT,            LOGGER_PRIORITY_LOW,  "инициализация выполнена" },
+    { LOGGER_INTERNAL_CODE_FLUSH,           LOGGER_PRIORITY_LOW,  "буфер сброшен в память" },
+    { LOGGER_INTERNAL_CODE_MARK,            LOGGER_PRIORITY_LOW,  "временная метка" },
+    { LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, LOGGER_PRIORITY_HIGH, "буфер полон, запись отброшена" },
+    { LOGGER_INTERNAL_CODE_INIT_FAIL,       LOGGER_PRIORITY_HIGH, "Init отклонён, см. src/val" },
 };
 
 /** Количество записей в LOGGER_InternalTable. */
