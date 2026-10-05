@@ -5,7 +5,7 @@
  *          библиотеки - общая часть встраиваемой и хостовой сторон.
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.9
+ * @version 1.12
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -80,6 +80,59 @@ typedef struct
     uint32_t rtc_time;   /**< показание RTC на момент события, либо 0 (см. rtc_time_fn) */
 } LOGGER_Record_t;
 
+/* ------------------------------------------------------------------------ */
+/*  Текстовое представление rtc_time (Unix-время, секунды с 1970, UTC без   */
+/*  часового пояса) - общее для встраиваемой и хостовой стороны              */
+/* ------------------------------------------------------------------------ */
+
+/** Ширина колонки RTC в текстовой строке лога: "ГГГГ-ММ-ДД ЧЧ:ММ:СС". */
+#define LOGGER_RTC_TEXT_WIDTH 19U
+
+/** @brief Переводит Unix-время в "ГГГГ-ММ-ДД ЧЧ:ММ:СС" (ровно 19 символов +
+ *         '\0'). unix_time == 0 (RTC не используется) - 19 пробелов, чтобы
+ *         колонки строки оставались ровными. Без календарных библиотек и
+ *         malloc (алгоритм civil-from-days).
+ * @param  unix_time секунды с 1970-01-01 00:00:00
+ * @param  out       буфер минимум LOGGER_RTC_TEXT_WIDTH + 1 байт */
+static inline void LOGGER_UnixTimeToText(uint32_t unix_time, char out[LOGGER_RTC_TEXT_WIDTH + 1U])
+{
+    if (unix_time == 0U)
+    {
+        for (uint32_t i = 0U; i < LOGGER_RTC_TEXT_WIDTH; i++)
+        {
+            out[i] = ' ';
+        }
+        out[LOGGER_RTC_TEXT_WIDTH] = '\0';
+        return;
+    }
+
+    uint32_t days = unix_time / 86400U;
+    uint32_t secs = unix_time % 86400U;
+    uint32_t z    = days + 719468U;
+    uint32_t era  = z / 146097U;
+    uint32_t doe  = z - (era * 146097U);
+    uint32_t yoe  = (doe - (doe / 1460U) + (doe / 36524U) - (doe / 146096U)) / 365U;
+    uint32_t doy  = doe - ((365U * yoe) + (yoe / 4U) - (yoe / 100U));
+    uint32_t mp   = ((5U * doy) + 2U) / 153U;
+    uint32_t day  = doy - (((153U * mp) + 2U) / 5U) + 1U;
+    uint32_t mon  = (mp < 10U) ? (mp + 3U) : (mp - 9U);
+    uint32_t year = yoe + (era * 400U) + ((mon <= 2U) ? 1U : 0U);
+    uint32_t v[6] = { year, mon, day, secs / 3600U, (secs % 3600U) / 60U, secs % 60U };
+    static const uint8_t pos[6]   = { 0U, 5U, 8U, 11U, 14U, 17U };
+    static const uint8_t digits[6] = { 4U, 2U, 2U, 2U, 2U, 2U };
+
+    out[4] = '-'; out[7] = '-'; out[10] = ' '; out[13] = ':'; out[16] = ':';
+    out[LOGGER_RTC_TEXT_WIDTH] = '\0';
+    for (uint32_t f = 0U; f < 6U; f++)
+    {
+        uint32_t x = v[f];
+        for (uint32_t d = digits[f]; d > 0U; d--)
+        {
+            out[pos[f] + d - 1U] = (char)('0' + (x % 10U));
+            x /= 10U;
+        }
+    }
+}
 /* ------------------------------------------------------------------------ */
 /*  Служебные (зарезервированные) коды логов самой библиотеки               */
 /* ------------------------------------------------------------------------ */

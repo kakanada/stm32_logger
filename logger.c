@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.11
+ * @version 1.12
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -268,21 +268,24 @@ static char logger_priority_letter(LOGGER_Priority_t priority)
 
 /** @brief Формирует строку лога в приёмник - единый формат SWO и
  *         LOGGER_FormatConsoleLine() (колонки фиксированной ширины):
- *         "<мс,8> <ГРУППА,8> <L|M|H> 0x<код,4> <src,4> <val,11> <описание>\r\n".
- *         Показание RTC в строку не входит (остаётся в записи/write_fn).
+ *         "<RTC,19> <мс,8> <ГРУППА,8> <L|M|H> 0x<код,4> <src,4> <val,11> <описание>\r\n".
+ *         RTC - "ГГГГ-ММ-ДД ЧЧ:ММ:СС" из Unix-времени, при rtc_time == 0 - 19 пробелов.
  * @param  o           приёмник
  * @param  code        код лога
  * @param  source_id   идентификатор источника события
  * @param  priority    приоритет кода
  * @param  value       значение переменной
  * @param  systick     HAL_GetTick() на момент события
- * @param  rtc_time    не используется (совместимость сигнатуры)
+ * @param  rtc_time    Unix-время RTC на момент события, либо 0
  * @param  description текстовое описание кода, либо NULL */
 static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_id,
                                 LOGGER_Priority_t priority, int32_t value, uint32_t systick,
                                 uint32_t rtc_time, const char *description)
 {
-    (void)rtc_time;
+    char rtc_text[LOGGER_RTC_TEXT_WIDTH + 1U];
+    LOGGER_UnixTimeToText(rtc_time, rtc_text);
+    logger_out_puts(o, rtc_text);
+    logger_out_putc(o, ' ');
     logger_out_uint32(o, systick, 8U);
     logger_out_putc(o, ' ');
     logger_out_puts(o, (code <= LOGGER_INTERNAL_CODE_MAX) ? "LOGGER  " : LOGGER_GetGroupName(code));

@@ -112,6 +112,7 @@ const char *LOGDEC_GetGroupName(uint16_t code)
  * @return длина полной строки без '\0' */
 size_t LOGDEC_FormatLine(char *buf, size_t size, const LOGDEC_DecodedRecord_t *rec)
 {
+    char rtc_text[LOGGER_RTC_TEXT_WIDTH + 1U];
     char prio = '?';
     int  n;
 
@@ -127,12 +128,14 @@ size_t LOGDEC_FormatLine(char *buf, size_t size, const LOGDEC_DecodedRecord_t *r
         default: break;
     }
 
-    n = snprintf(buf, size, "%8lu %s %c 0x%04X %04X %11ld %s",
-                 (unsigned long)rec->systick, LOGDEC_GetGroupName(rec->code), prio,
+    LOGGER_UnixTimeToText(rec->rtc_time, rtc_text);
+    n = snprintf(buf, size, "%s %8lu %s %c 0x%04X %04X %11ld %s",
+                 rtc_text, (unsigned long)rec->systick, LOGDEC_GetGroupName(rec->code), prio,
                  (unsigned)rec->code, (unsigned)rec->source_id, (long)rec->value,
                  (rec->description != NULL) ? rec->description : "???");
     return (n > 0) ? (size_t)n : 0U;
 }
+
 /* ------------------------------------------------------------------------ */
 /*  Постфактум-статистика частоты вызовов по разобранному дампу             */
 /* ------------------------------------------------------------------------ */
