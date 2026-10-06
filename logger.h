@@ -5,7 +5,7 @@
  *          Полное описание архитектуры и API - см. README.md/API_REFERENCE.md.
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.12
+ * @version 1.13
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -394,6 +394,18 @@ uint32_t LOGGER_GetDroppedCount(void);
  * @return максимальное число одновременно лежавших в буфере записей
  */
 uint16_t LOGGER_GetBufferHighWater(void);
+
+/**
+ * @brief  Сколько раз сработала ошибка самой библиотеки (служебный код
+ *         LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW/UNKNOWN_CODE/RING_CORRUPT/
+ *         WAIT_TIMEOUT/MARK_ID_RANGE/NOT_INIT) с момента старта. В журнал
+ *         такая ошибка пишется только на 1-м, 2-м, 4-м, 8-м... срабатывании
+ *         (защита от лавины), точный счёт - здесь.
+ * @param  code служебный код ошибки (0x0004, 0x0006-0x000A)
+ * @return число срабатываний; 0 для кода, не являющегося ошибкой библиотеки.
+ *         Безопасно из любого контекста.
+ */
+uint32_t LOGGER_GetErrorCount(uint16_t code);
 
 #ifdef __cplusplus
 }

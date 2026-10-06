@@ -5,7 +5,7 @@
  *          библиотеки - общая часть встраиваемой и хостовой сторон.
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.12
+ * @version 1.13
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -149,8 +149,21 @@ static inline void LOGGER_UnixTimeToText(uint32_t unix_time, char out[LOGGER_RTC
 #define LOGGER_INTERNAL_CODE_INIT             0x0001U /**< LOGGER_Init() успешно завершена */
 #define LOGGER_INTERNAL_CODE_FLUSH            0x0002U /**< буфер сброшен в write_fn */
 #define LOGGER_INTERNAL_CODE_MARK             0x0003U /**< вызвана LOGGER_Mark() */
-#define LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW  0x0004U /**< буфер физически полон, запись отброшена (см. README) */
+#define LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW  0x0004U /**< кольцо физически полно, запись отброшена: source_id = код отброшенной записи, value = номер срабатывания (только консоль, см. README) */
 #define LOGGER_INTERNAL_CODE_INIT_FAIL        0x0005U /**< LOGGER_Init() отклонена: source_id = код проблемной записи таблицы (0, если не относится к записи), value = LOGGER_INIT_FAIL_* */
+#define LOGGER_INTERNAL_CODE_UNKNOWN_CODE     0x0006U /**< LOGGER_Log() вызван с кодом, которого нет в таблице: source_id = этот код, value = номер срабатывания */
+#define LOGGER_INTERNAL_CODE_RING_CORRUPT     0x0007U /**< индексы кольцевого буфера повреждены, накопленное отброшено: source_id = число потерянных записей, value = номер срабатывания */
+#define LOGGER_INTERNAL_CODE_WAIT_TIMEOUT     0x0008U /**< write_fn не освободил место за LOGGER_OVERFLOW_WAIT_MS: source_id = код отброшенной записи, value = номер срабатывания */
+#define LOGGER_INTERNAL_CODE_MARK_ID_RANGE    0x0009U /**< LOGGER_Mark() с mark_id >= LOGGER_MARK_MAX_IDS (метка записана, статистика нет): source_id = mark_id, value = номер срабатывания */
+#define LOGGER_INTERNAL_CODE_NOT_INIT         0x000AU /**< вызов API до LOGGER_Init() либо без write_fn: source_id = LOGGER_NOT_INIT_API_*, value = номер срабатывания */
+#define LOGGER_INTERNAL_CODE_DROPPED_SUMMARY  0x000BU /**< сохраняется в память, когда после потерь снова появилось место: value = сколько записей потеряно с прошлой такой записи */
+
+/** Какой API вызван в неподходящем состоянии - source_id служебного лога
+ *  LOGGER_INTERNAL_CODE_NOT_INIT. */
+#define LOGGER_NOT_INIT_API_LOG             1U
+#define LOGGER_NOT_INIT_API_MARK            2U
+#define LOGGER_NOT_INIT_API_FLUSH           3U
+#define LOGGER_NOT_INIT_API_EMERGENCY_SAVE  4U
 
 /** Причины отказа LOGGER_Init() - передаются в value служебного лога
  *  LOGGER_INTERNAL_CODE_INIT_FAIL (выводится только в console_fn/SWO). */
@@ -177,6 +190,12 @@ static const LOGGER_LogEntry_t LOGGER_InternalTable[] =
     { LOGGER_INTERNAL_CODE_MARK,            LOGGER_PRIORITY_LOW,  "временная метка" },
     { LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, LOGGER_PRIORITY_HIGH, "буфер полон, запись отброшена" },
     { LOGGER_INTERNAL_CODE_INIT_FAIL,       LOGGER_PRIORITY_HIGH, "Init отклонён, см. src/val" },
+    { LOGGER_INTERNAL_CODE_UNKNOWN_CODE,    LOGGER_PRIORITY_HIGH,   "неизвестный код лога (src=код)" },
+    { LOGGER_INTERNAL_CODE_RING_CORRUPT,    LOGGER_PRIORITY_HIGH,   "кольцо повреждено (src=потеряно)" },
+    { LOGGER_INTERNAL_CODE_WAIT_TIMEOUT,    LOGGER_PRIORITY_HIGH,   "write_fn завис, отброшено (src=код)" },
+    { LOGGER_INTERNAL_CODE_MARK_ID_RANGE,   LOGGER_PRIORITY_MEDIUM, "mark_id вне диапазона (src=mark_id)" },
+    { LOGGER_INTERNAL_CODE_NOT_INIT,        LOGGER_PRIORITY_MEDIUM, "вызов до Init либо без write_fn (src=API)" },
+    { LOGGER_INTERNAL_CODE_DROPPED_SUMMARY, LOGGER_PRIORITY_HIGH,   "потеряно записей с прошлой сводки" },
 };
 
 /** Количество записей в LOGGER_InternalTable. */

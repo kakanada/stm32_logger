@@ -6,7 +6,7 @@
  *          и хостовой сторон библиотеки.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.11
+ * @version 1.13
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -107,6 +107,10 @@
 #define LOG_OFFSET_CANMGR_RX_OVERFLOW   0x04U
 #define LOG_OFFSET_CANMGR_BUS_OFF       0x05U
 #define LOG_OFFSET_CANMGR_NO_AUTORETRANS 0x06U
+#define LOG_OFFSET_CANMGR_TX_INVALID_ARG 0x07U
+#define LOG_OFFSET_CANMGR_TX_LEN_CLAMPED 0x08U
+#define LOG_OFFSET_CANMGR_TX_HW_FAIL    0x09U
+#define LOG_OFFSET_CANMGR_RX_BAD_DLC    0x0AU
 
 /* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом can_manager. */
 #define LOG_CODE_CANMGR_INIT_OK       ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_INIT_OK))
@@ -116,6 +120,10 @@
 #define LOG_CODE_CANMGR_RX_OVERFLOW   ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_RX_OVERFLOW))
 #define LOG_CODE_CANMGR_BUS_OFF       ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_BUS_OFF))
 #define LOG_CODE_CANMGR_NO_AUTORETRANS ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_NO_AUTORETRANS))
+#define LOG_CODE_CANMGR_TX_INVALID_ARG ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_TX_INVALID_ARG))
+#define LOG_CODE_CANMGR_TX_LEN_CLAMPED ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_TX_LEN_CLAMPED))
+#define LOG_CODE_CANMGR_TX_HW_FAIL    ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_TX_HW_FAIL))
+#define LOG_CODE_CANMGR_RX_BAD_DLC    ((uint16_t)((LOG_ADDR_CANMGR << 8) | LOG_OFFSET_CANMGR_RX_BAD_DLC))
 #endif /* LOGGER_ENABLE_CANMGR */
 
 #ifdef LOGGER_ENABLE_USB_ETH
@@ -140,6 +148,17 @@
 #define LOG_OFFSET_USB_ETH_SEND_NO_MEM   0x0DU
 #define LOG_OFFSET_USB_ETH_LISTEN_FAIL   0x0EU
 #define LOG_OFFSET_USB_ETH_UDP_BIND_FAIL 0x0FU
+#define LOG_OFFSET_USB_ETH_API_ERROR 0x10U
+#define LOG_OFFSET_USB_ETH_TX_NO_USB 0x11U
+#define LOG_OFFSET_USB_ETH_TCP_SEND_FAIL 0x12U
+#define LOG_OFFSET_USB_ETH_UDP_SEND_FAIL 0x13U
+#define LOG_OFFSET_USB_ETH_RX_INPUT_FAIL 0x14U
+#define LOG_OFFSET_USB_ETH_LWIP_MEM_ERR 0x15U
+#define LOG_OFFSET_USB_ETH_LWIP_ASSERT 0x16U
+#define LOG_OFFSET_USB_ETH_LWIP_ARG_ERR 0x17U
+#define LOG_OFFSET_USB_ETH_TCP_CLOSE_RST 0x18U
+#define LOG_OFFSET_USB_ETH_TCP_ACCEPT_ERR 0x19U
+#define LOG_OFFSET_USB_ETH_UDP_RX_TRUNC 0x1AU
 
 /* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом usb_eth. */
 #define LOG_CODE_USB_ETH_INIT_OK       ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_INIT_OK))
@@ -158,6 +177,17 @@
 #define LOG_CODE_USB_ETH_SEND_NO_MEM   ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_SEND_NO_MEM))
 #define LOG_CODE_USB_ETH_LISTEN_FAIL   ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_LISTEN_FAIL))
 #define LOG_CODE_USB_ETH_UDP_BIND_FAIL ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_UDP_BIND_FAIL))
+#define LOG_CODE_USB_ETH_API_ERROR ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_API_ERROR))
+#define LOG_CODE_USB_ETH_TX_NO_USB ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TX_NO_USB))
+#define LOG_CODE_USB_ETH_TCP_SEND_FAIL ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TCP_SEND_FAIL))
+#define LOG_CODE_USB_ETH_UDP_SEND_FAIL ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_UDP_SEND_FAIL))
+#define LOG_CODE_USB_ETH_RX_INPUT_FAIL ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_RX_INPUT_FAIL))
+#define LOG_CODE_USB_ETH_LWIP_MEM_ERR ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_LWIP_MEM_ERR))
+#define LOG_CODE_USB_ETH_LWIP_ASSERT ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_LWIP_ASSERT))
+#define LOG_CODE_USB_ETH_LWIP_ARG_ERR ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_LWIP_ARG_ERR))
+#define LOG_CODE_USB_ETH_TCP_CLOSE_RST ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TCP_CLOSE_RST))
+#define LOG_CODE_USB_ETH_TCP_ACCEPT_ERR ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_TCP_ACCEPT_ERR))
+#define LOG_CODE_USB_ETH_UDP_RX_TRUNC ((uint16_t)((LOG_ADDR_USB_ETH << 8) | LOG_OFFSET_USB_ETH_UDP_RX_TRUNC))
 #endif /* LOGGER_ENABLE_USB_ETH */
 
 #ifdef LOGGER_ENABLE_USB_DEV
@@ -177,6 +207,12 @@
 #define LOG_OFFSET_USB_DEV_COM_CLOSE         0x08U
 #define LOG_OFFSET_USB_DEV_COM_TX_BUSY       0x09U
 #define LOG_OFFSET_USB_DEV_ETH_DEINIT        0x0AU
+#define LOG_OFFSET_USB_DEV_API_ERROR 0x0BU
+#define LOG_OFFSET_USB_DEV_COM_TX_NOT_READY 0x0CU
+#define LOG_OFFSET_USB_DEV_COM_TX_DISCARD 0x0DU
+#define LOG_OFFSET_USB_DEV_USB_CONNECT_FAIL 0x0EU
+#define LOG_OFFSET_USB_DEV_TUSB_ASSERT 0x0FU
+#define LOG_OFFSET_USB_DEV_LOG_SUPPRESSED 0x10U
 
 /* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом usb_dev. */
 #define LOG_CODE_USB_DEV_USB_START_FAIL    ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_USB_START_FAIL))
@@ -190,6 +226,12 @@
 #define LOG_CODE_USB_DEV_COM_CLOSE         ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_CLOSE))
 #define LOG_CODE_USB_DEV_COM_TX_BUSY       ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_TX_BUSY))
 #define LOG_CODE_USB_DEV_ETH_DEINIT        ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_ETH_DEINIT))
+#define LOG_CODE_USB_DEV_API_ERROR ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_API_ERROR))
+#define LOG_CODE_USB_DEV_COM_TX_NOT_READY ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_TX_NOT_READY))
+#define LOG_CODE_USB_DEV_COM_TX_DISCARD ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_COM_TX_DISCARD))
+#define LOG_CODE_USB_DEV_USB_CONNECT_FAIL ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_USB_CONNECT_FAIL))
+#define LOG_CODE_USB_DEV_TUSB_ASSERT ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_TUSB_ASSERT))
+#define LOG_CODE_USB_DEV_LOG_SUPPRESSED ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_LOG_SUPPRESSED))
 #endif /* LOGGER_ENABLE_USB_DEV */
 
 /* ======================================================================== */
@@ -297,6 +339,12 @@
 #define LOG_OFFSET_VESC_EXIST_TIMEOUT  0x03U
 #define LOG_OFFSET_VESC_EXIST_OK           0x04U
 #define LOG_OFFSET_VESC_CTRL_MODE          0x05U
+#define LOG_OFFSET_VESC_SEND_FAIL          0x06U
+#define LOG_OFFSET_VESC_RX_BAD_LEN         0x07U
+#define LOG_OFFSET_VESC_BAD_VALUE          0x08U
+#define LOG_OFFSET_VESC_MISUSE             0x09U
+#define LOG_OFFSET_VESC_POSMEM             0x0AU
+#define LOG_OFFSET_VESC_LOG_SUPPRESSED     0x0BU
 #define LOG_OFFSET_VESC_BR_INIT_OK         0x10U
 #define LOG_OFFSET_VESC_BR_INIT_FAIL       0x11U
 #define LOG_OFFSET_VESC_BR_MCCONF_READ     0x12U
@@ -316,6 +364,19 @@
 #define LOG_OFFSET_VESC_BR_RX_TIMEOUT      0x20U
 #define LOG_OFFSET_VESC_BR_CAN_CRC_ERROR   0x21U
 #define LOG_OFFSET_VESC_BR_FAULT           0x22U
+#define LOG_OFFSET_VESC_BR_INIT_BAD_CONFIG 0x23U
+#define LOG_OFFSET_VESC_BR_INIT_POOL_FULL  0x24U
+#define LOG_OFFSET_VESC_BR_INIT_FILTER_FAIL 0x25U
+#define LOG_OFFSET_VESC_BR_FWD_TOO_BIG     0x26U
+#define LOG_OFFSET_VESC_BR_FWD_SEND_BUSY   0x27U
+#define LOG_OFFSET_VESC_BR_FWD_SEND_ERROR  0x28U
+#define LOG_OFFSET_VESC_BR_RX_CRC_ERROR    0x29U
+#define LOG_OFFSET_VESC_BR_RX_BAD_LEN      0x2AU
+#define LOG_OFFSET_VESC_BR_CAN_BAD_FRAME   0x2BU
+#define LOG_OFFSET_VESC_BR_CAN_FILL_OVERFLOW 0x2CU
+#define LOG_OFFSET_VESC_BR_CAN_LEN_ERROR   0x2DU
+#define LOG_OFFSET_VESC_BR_FWD_BAD_FRAME   0x2EU
+#define LOG_OFFSET_VESC_BR_TX_TOO_BIG      0x2FU
 
 /* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом motor_vesc. */
 #define LOG_CODE_VESC_INIT_OK       ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_INIT_OK))
@@ -324,6 +385,12 @@
 #define LOG_CODE_VESC_EXIST_TIMEOUT ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_EXIST_TIMEOUT))
 #define LOG_CODE_VESC_EXIST_OK           ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_EXIST_OK))
 #define LOG_CODE_VESC_CTRL_MODE          ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_CTRL_MODE))
+#define LOG_CODE_VESC_SEND_FAIL          ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_SEND_FAIL))
+#define LOG_CODE_VESC_RX_BAD_LEN         ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_RX_BAD_LEN))
+#define LOG_CODE_VESC_BAD_VALUE          ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BAD_VALUE))
+#define LOG_CODE_VESC_MISUSE             ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_MISUSE))
+#define LOG_CODE_VESC_POSMEM             ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_POSMEM))
+#define LOG_CODE_VESC_LOG_SUPPRESSED     ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_LOG_SUPPRESSED))
 #define LOG_CODE_VESC_BR_INIT_OK         ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_INIT_OK))
 #define LOG_CODE_VESC_BR_INIT_FAIL       ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_INIT_FAIL))
 #define LOG_CODE_VESC_BR_MCCONF_READ     ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_MCCONF_READ))
@@ -343,6 +410,19 @@
 #define LOG_CODE_VESC_BR_RX_TIMEOUT      ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_RX_TIMEOUT))
 #define LOG_CODE_VESC_BR_CAN_CRC_ERROR   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_CAN_CRC_ERROR))
 #define LOG_CODE_VESC_BR_FAULT           ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FAULT))
+#define LOG_CODE_VESC_BR_INIT_BAD_CONFIG ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_INIT_BAD_CONFIG))
+#define LOG_CODE_VESC_BR_INIT_POOL_FULL  ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_INIT_POOL_FULL))
+#define LOG_CODE_VESC_BR_INIT_FILTER_FAIL ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_INIT_FILTER_FAIL))
+#define LOG_CODE_VESC_BR_FWD_TOO_BIG     ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FWD_TOO_BIG))
+#define LOG_CODE_VESC_BR_FWD_SEND_BUSY   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FWD_SEND_BUSY))
+#define LOG_CODE_VESC_BR_FWD_SEND_ERROR  ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FWD_SEND_ERROR))
+#define LOG_CODE_VESC_BR_RX_CRC_ERROR    ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_RX_CRC_ERROR))
+#define LOG_CODE_VESC_BR_RX_BAD_LEN      ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_RX_BAD_LEN))
+#define LOG_CODE_VESC_BR_CAN_BAD_FRAME   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_CAN_BAD_FRAME))
+#define LOG_CODE_VESC_BR_CAN_FILL_OVERFLOW ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_CAN_FILL_OVERFLOW))
+#define LOG_CODE_VESC_BR_CAN_LEN_ERROR   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_CAN_LEN_ERROR))
+#define LOG_CODE_VESC_BR_FWD_BAD_FRAME   ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_FWD_BAD_FRAME))
+#define LOG_CODE_VESC_BR_TX_TOO_BIG      ((uint16_t)((LOG_ADDR_VESC << 8) | LOG_OFFSET_VESC_BR_TX_TOO_BIG))
 #endif /* LOGGER_ENABLE_VESC */
 
 #ifdef LOGGER_ENABLE_BISS_IRS
@@ -413,6 +493,10 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_CANMGR_RX_OVERFLOW,   LOGGER_PRIORITY_MEDIUM, "переполнение Rx FIFO0" },
     { LOG_CODE_CANMGR_BUS_OFF,       LOGGER_PRIORITY_HIGH,   "Bus-Off, автовосстановлен" },
     { LOG_CODE_CANMGR_NO_AUTORETRANS, LOGGER_PRIORITY_MEDIUM, "AutoRetransmission отключен (DAR/NART)" },
+    { LOG_CODE_CANMGR_TX_INVALID_ARG, LOGGER_PRIORITY_MEDIUM, "Send: bus/data == NULL (value=id кадра)" },
+    { LOG_CODE_CANMGR_TX_LEN_CLAMPED, LOGGER_PRIORITY_LOW,    "Send: len>8 обрезан (value=len)" },
+    { LOG_CODE_CANMGR_TX_HW_FAIL,     LOGGER_PRIORITY_MEDIUM, "отказ HAL при Tx, кадр в очереди (id)" },
+    { LOG_CODE_CANMGR_RX_BAD_DLC,     LOGGER_PRIORITY_LOW,    "Rx: DLC>8, обрезан до 8 (value=DLC)" },
 #endif /* LOGGER_ENABLE_CANMGR */
 
     /* ------------------------------------------------------------------ */
@@ -437,6 +521,17 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_USB_ETH_SEND_NO_MEM,   LOGGER_PRIORITY_MEDIUM, "нет памяти lwIP для отправки" },
     { LOG_CODE_USB_ETH_LISTEN_FAIL,   LOGGER_PRIORITY_HIGH,   "не удалось открыть TCP-порт" },
     { LOG_CODE_USB_ETH_UDP_BIND_FAIL, LOGGER_PRIORITY_HIGH,   "не удалось открыть UDP-порт" },
+    { LOG_CODE_USB_ETH_API_ERROR, LOGGER_PRIORITY_MEDIUM, "неверный вызов API сети" },
+    { LOG_CODE_USB_ETH_TX_NO_USB, LOGGER_PRIORITY_MEDIUM, "кадр не отправлен: USB не подключён" },
+    { LOG_CODE_USB_ETH_TCP_SEND_FAIL, LOGGER_PRIORITY_MEDIUM, "ошибка отправки TCP (lwIP)" },
+    { LOG_CODE_USB_ETH_UDP_SEND_FAIL, LOGGER_PRIORITY_MEDIUM, "ошибка отправки UDP (lwIP)" },
+    { LOG_CODE_USB_ETH_RX_INPUT_FAIL, LOGGER_PRIORITY_MEDIUM, "lwIP отверг входящий кадр" },
+    { LOG_CODE_USB_ETH_LWIP_MEM_ERR, LOGGER_PRIORITY_HIGH, "нехватка памяти в lwIP" },
+    { LOG_CODE_USB_ETH_LWIP_ASSERT, LOGGER_PRIORITY_HIGH, "внутренняя проверка lwIP" },
+    { LOG_CODE_USB_ETH_LWIP_ARG_ERR, LOGGER_PRIORITY_HIGH, "неверные аргументы функции lwIP" },
+    { LOG_CODE_USB_ETH_TCP_CLOSE_RST, LOGGER_PRIORITY_MEDIUM, "нет памяти на FIN, закрыто сбросом" },
+    { LOG_CODE_USB_ETH_TCP_ACCEPT_ERR, LOGGER_PRIORITY_MEDIUM, "ошибка входящего TCP-подключения" },
+    { LOG_CODE_USB_ETH_UDP_RX_TRUNC, LOGGER_PRIORITY_MEDIUM, "входящая датаграмма UDP обрезана" },
 #endif /* LOGGER_ENABLE_USB_ETH */
 
     /* ------------------------------------------------------------------ */
@@ -456,6 +551,12 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_USB_DEV_COM_CLOSE,        LOGGER_PRIORITY_LOW,    "COM: порт закрыт на ПК" },
     { LOG_CODE_USB_DEV_COM_TX_BUSY,      LOGGER_PRIORITY_MEDIUM, "COM: TX отклонён - буфер полон" },
     { LOG_CODE_USB_DEV_ETH_DEINIT,       LOGGER_PRIORITY_LOW,    "ETH: сеть выключена (DeInit)" },
+    { LOG_CODE_USB_DEV_API_ERROR, LOGGER_PRIORITY_MEDIUM, "неверный вызов API USB/COM" },
+    { LOG_CODE_USB_DEV_COM_TX_NOT_READY, LOGGER_PRIORITY_MEDIUM, "COM TX: не подключён к ПК" },
+    { LOG_CODE_USB_DEV_COM_TX_DISCARD, LOGGER_PRIORITY_MEDIUM, "COM: неотправленные данные стёрты" },
+    { LOG_CODE_USB_DEV_USB_CONNECT_FAIL, LOGGER_PRIORITY_HIGH, "TinyUSB не подключил/отключил USB" },
+    { LOG_CODE_USB_DEV_TUSB_ASSERT, LOGGER_PRIORITY_HIGH, "внутренняя ошибка TinyUSB" },
+    { LOG_CODE_USB_DEV_LOG_SUPPRESSED, LOGGER_PRIORITY_MEDIUM, "записи подавлены (частота/повтор)" },
 #endif /* LOGGER_ENABLE_USB_DEV */
 
     /* ------------------------------------------------------------------ */
@@ -520,6 +621,12 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_VESC_EXIST_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "RequestExists - таймаут ответа PONG" },
     { LOG_CODE_VESC_EXIST_OK, LOGGER_PRIORITY_LOW, "веска ответила PONG" },
     { LOG_CODE_VESC_CTRL_MODE, LOGGER_PRIORITY_LOW, "смена режима (value=1..10)" },
+    { LOG_CODE_VESC_SEND_FAIL,     LOGGER_PRIORITY_MEDIUM, "отказ отправки CAN (value=cmd<<8|HAL)" },
+    { LOG_CODE_VESC_RX_BAD_LEN,    LOGGER_PRIORITY_MEDIUM, "статус короче 8 байт" },
+    { LOG_CODE_VESC_BAD_VALUE,     LOGGER_PRIORITY_LOW,    "NaN/вне диапазона в команде" },
+    { LOG_CODE_VESC_MISUSE,        LOGGER_PRIORITY_LOW,    "неверное использование API (value=код)" },
+    { LOG_CODE_VESC_POSMEM,        LOGGER_PRIORITY_LOW,    "нет валидной памяти положения" },
+    { LOG_CODE_VESC_LOG_SUPPRESSED, LOGGER_PRIORITY_LOW,   "подавлено повторов записи (src=код)" },
     { LOG_CODE_VESC_BR_INIT_OK, LOGGER_PRIORITY_LOW, "bridge: Init - мост создан" },
     { LOG_CODE_VESC_BR_INIT_FAIL, LOGGER_PRIORITY_HIGH, "bridge: Init - отказ (пул/фильтр)" },
     { LOG_CODE_VESC_BR_MCCONF_READ, LOGGER_PRIORITY_LOW, "bridge: чтение MCCONF (value=размер)" },
@@ -535,10 +642,23 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_VESC_BR_SCAN_DONE, LOGGER_PRIORITY_LOW, "bridge: скан CAN готов (value=число)" },
     { LOG_CODE_VESC_BR_REPLY_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "bridge: нет ответа вески (value=COMM-код)" },
     { LOG_CODE_VESC_BR_QUEUE_OVERFLOW, LOGGER_PRIORITY_HIGH, "bridge: очередь форвардинга полна" },
-    { LOG_CODE_VESC_BR_RX_ERROR, LOGGER_PRIORITY_MEDIUM, "bridge: ошибка CRC/STOP пакета клиента" },
+    { LOG_CODE_VESC_BR_RX_ERROR, LOGGER_PRIORITY_MEDIUM, "bridge: нарушена рамка пакета клиента" },
     { LOG_CODE_VESC_BR_RX_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "bridge: оборван пакет клиента" },
     { LOG_CODE_VESC_BR_CAN_CRC_ERROR, LOGGER_PRIORITY_MEDIUM, "bridge: ошибка CRC ответа вески по CAN" },
     { LOG_CODE_VESC_BR_FAULT, LOGGER_PRIORITY_HIGH, "bridge: fault вески изменился (value=код)" },
+    { LOG_CODE_VESC_BR_INIT_BAD_CONFIG,  LOGGER_PRIORITY_HIGH,   "bridge: Init - конфиг отклонён" },
+    { LOG_CODE_VESC_BR_INIT_POOL_FULL,   LOGGER_PRIORITY_HIGH,   "bridge: Init - пул мостов исчерпан" },
+    { LOG_CODE_VESC_BR_INIT_FILTER_FAIL, LOGGER_PRIORITY_HIGH,   "bridge: Init - фильтр CAN отклонён" },
+    { LOG_CODE_VESC_BR_FWD_TOO_BIG,      LOGGER_PRIORITY_MEDIUM, "bridge: команда клиента велика" },
+    { LOG_CODE_VESC_BR_FWD_SEND_BUSY,    LOGGER_PRIORITY_LOW,    "bridge: очередь CAN занята, отложено" },
+    { LOG_CODE_VESC_BR_FWD_SEND_ERROR,   LOGGER_PRIORITY_HIGH,   "bridge: CANMGR_Send вернул ошибку" },
+    { LOG_CODE_VESC_BR_RX_CRC_ERROR,     LOGGER_PRIORITY_MEDIUM, "bridge: неверный CRC пакета клиента" },
+    { LOG_CODE_VESC_BR_RX_BAD_LEN,       LOGGER_PRIORITY_MEDIUM, "bridge: неверная длина пакета клиента" },
+    { LOG_CODE_VESC_BR_CAN_BAD_FRAME,    LOGGER_PRIORITY_MEDIUM, "bridge: короткий служебный CAN-кадр" },
+    { LOG_CODE_VESC_BR_CAN_FILL_OVERFLOW, LOGGER_PRIORITY_MEDIUM, "bridge: кусок ответа вески вне буфера" },
+    { LOG_CODE_VESC_BR_CAN_LEN_ERROR,    LOGGER_PRIORITY_MEDIUM, "bridge: ответ вески длиннее буфера" },
+    { LOG_CODE_VESC_BR_FWD_BAD_FRAME,    LOGGER_PRIORITY_LOW,    "bridge: неверный формат CAN_FWD_FRAME" },
+    { LOG_CODE_VESC_BR_TX_TOO_BIG,       LOGGER_PRIORITY_MEDIUM, "bridge: ответ клиенту больше буфера" },
 #endif /* LOGGER_ENABLE_VESC */
 
     /* ------------------------------------------------------------------ */

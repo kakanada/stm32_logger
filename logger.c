@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.12
+ * @version 1.13
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -48,6 +48,40 @@ static uint16_t          s_high_water;
  *  два одновременных сброса из разных контекстов вычитают flushed_count из
  *  s_buffer_count дважды - второе вычитание уводит счётчик в underflow. */
 static uint8_t           s_flush_in_progress;
+/** LOGGER_Init() успешно выполнялся хотя бы раз. */
+static uint8_t           s_initialized;
+/** Потеряно записей с момента последней сохранённой сводки
+ *  LOGGER_INTERNAL_CODE_DROPPED_SUMMARY (см. logger_summary_put_locked()). */
+static uint32_t          s_dropped_unreported;
+
+/** Ошибки самой библиотеки (см. logger_report_error()): по виду ошибки -
+ *  счётчик срабатываний с момента старта и служебный код. Вид = индекс. */
+typedef enum
+{
+    LOGGER_ERR_OVERFLOW = 0,
+    LOGGER_ERR_UNKNOWN_CODE,
+    LOGGER_ERR_RING_CORRUPT,
+    LOGGER_ERR_WAIT_TIMEOUT,
+    LOGGER_ERR_MARK_RANGE,
+    LOGGER_ERR_NOT_INIT,
+    LOGGER_ERR_COUNT
+} logger_err_kind_t;
+
+static const uint16_t s_err_codes[LOGGER_ERR_COUNT] =
+{
+    LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW,
+    LOGGER_INTERNAL_CODE_UNKNOWN_CODE,
+    LOGGER_INTERNAL_CODE_RING_CORRUPT,
+    LOGGER_INTERNAL_CODE_WAIT_TIMEOUT,
+    LOGGER_INTERNAL_CODE_MARK_ID_RANGE,
+    LOGGER_INTERNAL_CODE_NOT_INIT
+};
+
+static uint32_t s_err_count[LOGGER_ERR_COUNT];
+/** 1, пока выводится служебная запись об ошибке: защита от рекурсии - ошибка,
+ *  возникшая при выводе ошибки (например, переполнение при сохранении
+ *  записи об ошибке), только считается и новой записи не порождает. */
+static uint8_t  s_reporting;
 static LOGGER_Priority_t s_max_priority;
 static uint16_t          s_max_priority_count;
 
@@ -438,6 +472,96 @@ static void logger_critical_exit(uint32_t primask)
 static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
                          uint8_t persist);
 
+/** @brief Сообщает об ошибке самой библиотеки служебной записью. Защита от
+ *         лавины и зацикливания: (1) запись выводится только на 1-м, 2-м, 4-м,
+ *         8-м... срабатывании данного вида (степени двойки), value = номер
+ *         срабатывания - по разнице соседних записей видно, сколько подавлено;
+ *         точный счёт - LOGGER_GetErrorCount(); (2) пока идёт вывод другой
+ *         такой записи (s_reporting), новая не порождается - ошибка только
+ *         считается: служебная запись не может вызвать ещё одну служебную.
+ * @param  kind      вид ошибки
+ * @param  source_id пояснение к ошибке (смысл зависит от кода)
+ * @param  persist   1 - можно сохранить в память; 0 - только вывод (кольцо
+ *                    полно/сброшено либо идёт аварийное сохранение) */
+static void logger_report_error(logger_err_kind_t kind, uint16_t source_id, uint8_t persist)
+{
+    uint32_t primask = logger_critical_enter();
+
+    if (s_err_count[kind] != UINT32_MAX)
+    {
+        s_err_count[kind]++;
+    }
+    uint32_t n    = s_err_count[kind];
+    uint8_t  emit = ((((n & (n - 1U)) == 0U)) && (s_reporting == 0U)) ? 1U : 0U;
+    if (emit != 0U)
+    {
+        s_reporting = 1U;
+    }
+    logger_critical_exit(primask);
+
+    if (emit == 0U)
+    {
+        return;
+    }
+
+    logger_emit(s_err_codes[kind], source_id, (int32_t)n, HAL_GetTick(), persist);
+    s_reporting = 0U;
+}
+
+/** @brief Кладёт запись в кольцо. Вызывать ТОЛЬКО под критической секцией и
+ *         когда в кольце есть свободное место. Обновляет пик заполнения и
+ *         счётчик триггера сброса по приоритету. */
+static void logger_ring_put_locked(uint16_t code, LOGGER_Priority_t priority, uint16_t source_id,
+                                    int32_t value, uint32_t systick, uint32_t rtc_time)
+{
+    uint16_t index = (uint16_t)(s_buffer_head + s_buffer_count);
+    if (index >= (uint16_t)LOGGER_BUFFER_CAPACITY)
+    {
+        index = (uint16_t)(index - (uint16_t)LOGGER_BUFFER_CAPACITY);
+    }
+
+    s_buffer[index].code      = code;
+    s_buffer[index].source_id = source_id;
+    s_buffer[index].value     = value;
+    s_buffer[index].systick   = systick;
+    s_buffer[index].rtc_time  = rtc_time;
+    s_buffer_count            = (uint16_t)(s_buffer_count + 1U);
+
+    if (s_buffer_count > s_high_water)
+    {
+        s_high_water = s_buffer_count;
+    }
+
+    if ((s_max_priority_count == 0U) || (priority > s_max_priority))
+    {
+        s_max_priority       = priority;
+        s_max_priority_count = 1U;
+    }
+    else if (priority == s_max_priority)
+    {
+        s_max_priority_count++;
+    }
+    /* priority < s_max_priority: запись не учитывается в счётчике
+     * триггера сброса - см. архитектуру в logger.h */
+}
+
+/** @brief Если после потерь появилось место - кладёт в кольцо сводку
+ *         LOGGER_INTERNAL_CODE_DROPPED_SUMMARY (value = потеряно с прошлой
+ *         сводки), чтобы потери были видны и в сохранённом логе, а не только
+ *         в консоли. Под критической секцией; место проверяет вызывающий
+ *         (нужно свободное место под сводку и под свою запись).
+ * @param  systick  время сводки
+ * @param  rtc_time RTC сводки либо 0 */
+static void logger_summary_put_locked(uint32_t systick, uint32_t rtc_time)
+{
+    uint32_t lost = s_dropped_unreported;
+
+    s_dropped_unreported = 0U;
+    logger_ring_put_locked(LOGGER_INTERNAL_CODE_DROPPED_SUMMARY, LOGGER_PRIORITY_HIGH, 0U,
+                            (lost > (uint32_t)INT32_MAX) ? INT32_MAX : (int32_t)lost, systick,
+                            rtc_time);
+}
+
 /** @brief Отправляет в write_fn один непрерывный сегмент кольца (от головы
  *         до конца массива либо до последней записи - что раньше) и
  *         освобождает его. Записи, добавленные конкурентно ПОКА идёт write_fn
@@ -460,11 +584,15 @@ static uint16_t logger_flush_raw(void)
     {
         /* Самовосстановление при повреждённых индексах - не читаем write_fn
          * за границей s_buffer; накопленное отбрасывается и учитывается. */
-        s_dropped_count     += s_buffer_count;
+        uint16_t lost = (s_buffer_count > (uint16_t)LOGGER_BUFFER_CAPACITY)
+                            ? (uint16_t)LOGGER_BUFFER_CAPACITY : s_buffer_count;
+        s_dropped_count     += lost;
+        s_dropped_unreported += lost;
         s_buffer_head        = 0U;
         s_buffer_count       = 0U;
         s_max_priority_count = 0U;
         logger_critical_exit(primask);
+        logger_report_error(LOGGER_ERR_RING_CORRUPT, lost, 0U);
         return 0U;
     }
 
@@ -525,6 +653,20 @@ static uint16_t logger_flush_all_raw(void)
  *         чтобы не порождать рекурсивный сброс буфера о самом себе. */
 static void logger_flush_internal(void)
 {
+    if (s_dropped_unreported != 0U)
+    {
+        /* Сводку о потерях кладём перед сбросом - уйдёт в память вместе с ним. */
+        uint32_t systick = HAL_GetTick();
+        uint32_t rtc     = (s_config.rtc_time_fn != NULL)
+                               ? s_config.rtc_time_fn(s_config.rtc_context) : 0U;
+        uint32_t primask = logger_critical_enter();
+        if ((s_dropped_unreported != 0U) && (s_buffer_count < (uint16_t)LOGGER_BUFFER_CAPACITY))
+        {
+            logger_summary_put_locked(systick, rtc);
+        }
+        logger_critical_exit(primask);
+    }
+
     if (s_buffer_count == 0U)
     {
         return;
@@ -568,35 +710,15 @@ static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16
 
         if (s_buffer_count < (uint16_t)LOGGER_BUFFER_CAPACITY)
         {
-            uint16_t index = (uint16_t)(s_buffer_head + s_buffer_count);
-            if (index >= (uint16_t)LOGGER_BUFFER_CAPACITY)
+            /* Были потери, а теперь есть место под сводку И под запись -
+             * сначала сводка (value = сколько потеряно), потом сама запись. */
+            if ((s_dropped_unreported != 0U) &&
+                ((uint16_t)(s_buffer_count + 1U) < (uint16_t)LOGGER_BUFFER_CAPACITY))
             {
-                index = (uint16_t)(index - (uint16_t)LOGGER_BUFFER_CAPACITY);
+                logger_summary_put_locked(systick, rtc_time);
             }
 
-            s_buffer[index].code      = code;
-            s_buffer[index].source_id = source_id;
-            s_buffer[index].value     = value;
-            s_buffer[index].systick   = systick;
-            s_buffer[index].rtc_time  = rtc_time;
-            s_buffer_count            = (uint16_t)(s_buffer_count + 1U);
-
-            if (s_buffer_count > s_high_water)
-            {
-                s_high_water = s_buffer_count;
-            }
-
-            if ((s_max_priority_count == 0U) || (priority > s_max_priority))
-            {
-                s_max_priority       = priority;
-                s_max_priority_count = 1U;
-            }
-            else if (priority == s_max_priority)
-            {
-                s_max_priority_count++;
-            }
-            /* priority < s_max_priority: запись не учитывается в счётчике
-             * триггера сброса - см. архитектуру в logger.h */
+            logger_ring_put_locked(code, priority, source_id, value, systick, rtc_time);
 
             need_flush = ((s_max_priority_count >= s_threshold[s_max_priority]) ||
                           (s_buffer_count >= (uint16_t)LOGGER_BUFFER_WATERMARK)) ? 1U : 0U;
@@ -635,8 +757,16 @@ static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16
         /* Освободить место не удалось - честно считаем потерю. */
         primask = logger_critical_enter();
         s_dropped_count++;
+        if (s_dropped_unreported != UINT32_MAX)
+        {
+            s_dropped_unreported++;
+        }
         logger_critical_exit(primask);
-        logger_emit(LOGGER_INTERNAL_CODE_BUFFER_OVERFLOW, 0U, (int32_t)code, systick, 0U);
+        if (waiting != 0U)
+        {
+            logger_report_error(LOGGER_ERR_WAIT_TIMEOUT, code, 0U);
+        }
+        logger_report_error(LOGGER_ERR_OVERFLOW, code, 0U);
         return;
     }
 
@@ -722,6 +852,13 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
     if (user_table_index < LOGGER_LOG_TABLE_SIZE)
     {
         logger_freq_stats_bump(&s_code_stats[user_table_index], systick);
+    }
+
+    if (entry == NULL)
+    {
+        /* Код, которого нет в таблице: сама запись не сохраняется (нет приоритета
+         * и описания) - сообщаем об этом отдельной служебной записью. */
+        logger_report_error(LOGGER_ERR_UNKNOWN_CODE, code, 1U);
     }
 }
 
@@ -862,6 +999,8 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
     s_max_priority_count  = 0U;
     s_max_priority        = LOGGER_PRIORITY_LOW;
 
+    s_initialized         = 1U;
+
     logger_emit(LOGGER_INTERNAL_CODE_INIT, 0U, (int32_t)LOGGER_LOG_TABLE_SIZE, HAL_GetTick(), 0U);
 
     return HAL_OK;
@@ -877,6 +1016,10 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
  * @param  value     значение переменной */
 void LOGGER_Log(uint16_t code, uint16_t source_id, int32_t value)
 {
+    if (s_initialized == 0U)
+    {
+        logger_report_error(LOGGER_ERR_NOT_INIT, LOGGER_NOT_INIT_API_LOG, 0U);
+    }
     logger_emit(code, source_id, value, HAL_GetTick(), 1U);
 }
 
@@ -890,12 +1033,21 @@ void LOGGER_Mark(uint16_t mark_id)
 {
     uint32_t now = HAL_GetTick(); /* попадает в саму запись лога/буфер - всегда мс */
 
+    if (s_initialized == 0U)
+    {
+        logger_report_error(LOGGER_ERR_NOT_INIT, LOGGER_NOT_INIT_API_MARK, 0U);
+    }
+
     if (mark_id < LOGGER_MARK_MAX_IDS)
     {
         /* Статистика частоты метки - в единицах LOGGER_MARK_TIME_SOURCE
          * (мс через SysTick по умолчанию, либо мс/мкс через DWT), НЕ путать
          * с 'now' выше, который идёт в саму запись лога. */
         logger_freq_stats_bump(&s_mark_stats[mark_id], logger_mark_now());
+    }
+    else
+    {
+        logger_report_error(LOGGER_ERR_MARK_RANGE, mark_id, 1U);
     }
 
     logger_emit(LOGGER_INTERNAL_CODE_MARK, mark_id, (int32_t)mark_id, now, 1U);
@@ -979,6 +1131,7 @@ HAL_StatusTypeDef LOGGER_Flush(void)
 {
     if (!s_buffering_active)
     {
+        logger_report_error(LOGGER_ERR_NOT_INIT, LOGGER_NOT_INIT_API_FLUSH, 0U);
         return HAL_ERROR;
     }
     logger_flush_internal();
@@ -996,6 +1149,7 @@ HAL_StatusTypeDef LOGGER_EmergencySave(void)
 {
     if (!s_buffering_active)
     {
+        logger_report_error(LOGGER_ERR_NOT_INIT, LOGGER_NOT_INIT_API_EMERGENCY_SAVE, 0U);
         return HAL_ERROR;
     }
     if (s_buffer_count == 0U)
@@ -1025,4 +1179,25 @@ uint32_t LOGGER_GetDroppedCount(void)
 uint16_t LOGGER_GetBufferHighWater(void)
 {
     return s_high_water;
+}
+
+/** @brief Сколько раз сработала ошибка библиотеки - см. logger.h.
+ * @param  code служебный код ошибки (LOGGER_INTERNAL_CODE_*)
+ * @return число срабатываний с момента старта; 0 для кода, не являющегося
+ *          ошибкой библиотеки */
+uint32_t LOGGER_GetErrorCount(uint16_t code)
+{
+    uint32_t count = 0U;
+
+    for (uint32_t i = 0U; i < (uint32_t)LOGGER_ERR_COUNT; i++)
+    {
+        if (s_err_codes[i] == code)
+        {
+            uint32_t primask = logger_critical_enter();
+            count = s_err_count[i];
+            logger_critical_exit(primask);
+            break;
+        }
+    }
+    return count;
 }
