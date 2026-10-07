@@ -6,7 +6,7 @@
  *          и хостовой сторон библиотеки.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.14
+ * @version 1.15
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -690,7 +690,7 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_BISS_IRS_ZERO_HERE_REJECTED, LOGGER_PRIORITY_LOW,    "нет данных для калибровки" },
     { LOG_CODE_BISS_IRS_POLL_BAD_HANDLE,    LOGGER_PRIORITY_MEDIUM, "Poll - NULL/неверный хэндл" },
     { LOG_CODE_BISS_IRS_POLL_ENC_ERROR,     LOGGER_PRIORITY_MEDIUM, "энкодер сообщает ошибку (бит ERR)" },
-    { LOG_CODE_BISS_IRS_POLL_ENC_WARNING,   LOGGER_PRIORITY_LOW,    "энкодер сообщает предупреждение (WARN)" },
+    { LOG_CODE_BISS_IRS_POLL_ENC_WARNING,   LOGGER_PRIORITY_LOW,    "энкодер: предупреждение (бит WARN)" },
     { LOG_CODE_BISS_IRS_POLL_CRC_ERROR,     LOGGER_PRIORITY_MEDIUM, "Poll - CRC6 кадра не сошлась" },
     { LOG_CODE_BISS_IRS_POLL_FRAMING_ERROR, LOGGER_PRIORITY_MEDIUM, "Poll - ошибка START/CDS кадра" },
     { LOG_CODE_BISS_IRS_LINK_RECOVERED,     LOGGER_PRIORITY_LOW,    "связь восстановлена, кадры валидны" },

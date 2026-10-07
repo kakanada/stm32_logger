@@ -6,7 +6,7 @@
  *          API_REFERENCE.md.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.14
+ * @version 1.15
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
