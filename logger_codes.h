@@ -6,7 +6,7 @@
  *          и хостовой сторон библиотеки.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.15
+ * @version 1.16
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -51,6 +51,7 @@
  *      LOGGER_ENABLE_VESC        - can_vesc_stm32 (motor_vesc)    (0x84, устройство)
  *      LOGGER_ENABLE_BISS_IRS    - stm32_biss_irs                 (0x85, устройство)
  *      LOGGER_ENABLE_LSM6DSX     - lsm6dsx (accel+gyro)           (0x86, устройство)
+ *      LOGGER_ENABLE_REG         - stm32_reestr (реестр параметров) (0x03, система)
  * ============================================================================
  */
 
@@ -480,6 +481,36 @@
 #define LOG_CODE_LSM6DSX_POOL_EXHAUSTED   ((uint16_t)((LOG_ADDR_LSM6DSX << 8) | LOG_OFFSET_LSM6DSX_POOL_EXHAUSTED))
 #endif /* LOGGER_ENABLE_LSM6DSX */
 
+#ifdef LOGGER_ENABLE_REG
+/* Адресное пространство (старший байт кода), выделенное stm32_reestr
+ * (реестр параметров с NVM и протоколом хоста). Категория СИСТЕМА. */
+#define LOG_ADDR_REG 0x03U
+
+/* Смещения (младший байт) - номер события внутри диапазона реестра. */
+#define LOG_OFFSET_REG_INIT          0x01U
+#define LOG_OFFSET_REG_INIT_FAIL     0x02U
+#define LOG_OFFSET_REG_HOST_WRITE    0x03U
+#define LOG_OFFSET_REG_HOST_REJECT   0x04U
+#define LOG_OFFSET_REG_HOST_HELLO    0x05U
+#define LOG_OFFSET_REG_BAD_FRAME     0x06U
+#define LOG_OFFSET_REG_NVM_LOADED    0x07U
+#define LOG_OFFSET_REG_NVM_DEFAULTED 0x08U
+#define LOG_OFFSET_REG_NVM_SAVED     0x09U
+#define LOG_OFFSET_REG_NVM_ERROR     0x0AU
+
+/* Итоговые коды - используются и в LOGGER_LogTable ниже, и в самом реестре. */
+#define LOG_CODE_REG_INIT          ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_INIT))
+#define LOG_CODE_REG_INIT_FAIL     ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_INIT_FAIL))
+#define LOG_CODE_REG_HOST_WRITE    ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_HOST_WRITE))
+#define LOG_CODE_REG_HOST_REJECT   ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_HOST_REJECT))
+#define LOG_CODE_REG_HOST_HELLO    ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_HOST_HELLO))
+#define LOG_CODE_REG_BAD_FRAME     ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_BAD_FRAME))
+#define LOG_CODE_REG_NVM_LOADED    ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_NVM_LOADED))
+#define LOG_CODE_REG_NVM_DEFAULTED ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_NVM_DEFAULTED))
+#define LOG_CODE_REG_NVM_SAVED     ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_NVM_SAVED))
+#define LOG_CODE_REG_NVM_ERROR     ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_NVM_ERROR))
+#endif /* LOGGER_ENABLE_REG */
+
 /* ======================================================================== */
 /*  КАТЕГОРИЯ 4/4 - РЕЗЕРВ (0xE0xx-0xFFxx) - пока не используется.          */
 /* ======================================================================== */
@@ -492,6 +523,18 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /* ------------------------------------------------------------------ */
     { LOG_CODE_SYSTEM_START,     LOGGER_PRIORITY_LOW,  "штатный старт" },
     { LOG_CODE_SYSTEM_HAL_ERROR, LOGGER_PRIORITY_HIGH, "сбой инициализации HAL" },
+#ifdef LOGGER_ENABLE_REG
+    { LOG_CODE_REG_INIT,          LOGGER_PRIORITY_LOW,    "Реестр инициализирован" },
+    { LOG_CODE_REG_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "Ошибка инициализации реестра" },
+    { LOG_CODE_REG_HOST_WRITE,    LOGGER_PRIORITY_LOW,    "Хост изменил параметр" },
+    { LOG_CODE_REG_HOST_REJECT,   LOGGER_PRIORITY_MEDIUM, "Запись хоста отклонена" },
+    { LOG_CODE_REG_HOST_HELLO,    LOGGER_PRIORITY_LOW,    "Хост подключился" },
+    { LOG_CODE_REG_BAD_FRAME,     LOGGER_PRIORITY_MEDIUM, "Битый кадр от хоста" },
+    { LOG_CODE_REG_NVM_LOADED,    LOGGER_PRIORITY_LOW,    "Папка загружена из NVM" },
+    { LOG_CODE_REG_NVM_DEFAULTED, LOGGER_PRIORITY_MEDIUM, "Папка сброшена в умолчания" },
+    { LOG_CODE_REG_NVM_SAVED,     LOGGER_PRIORITY_LOW,    "Папка сохранена в NVM" },
+    { LOG_CODE_REG_NVM_ERROR,     LOGGER_PRIORITY_HIGH,   "Ошибка записи реестра в NVM" },
+#endif /* LOGGER_ENABLE_REG */
 
     /* ------------------------------------------------------------------ */
     /*  ПЕРИФЕРИЯ, интерфейсы МК (0x40xx-0x7Fxx).                          */
@@ -732,6 +775,9 @@ static const LOGGER_GroupName_t LOGGER_GroupNames[] =
 {
     { 0x00U, "LOGGER  " },
     { LOG_ADDR_SYSTEM, "SYSTEM  " },
+#ifdef LOGGER_ENABLE_REG
+    { LOG_ADDR_REG, "REGISTRY" },
+#endif
 #ifdef LOGGER_ENABLE_CANMGR
     { LOG_ADDR_CANMGR, "CAN_MGR " },
 #endif
