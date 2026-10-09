@@ -6,7 +6,7 @@
  *          и хостовой сторон библиотеки.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.16
+ * @version 1.17
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -51,6 +51,7 @@
  *      LOGGER_ENABLE_VESC        - can_vesc_stm32 (motor_vesc)    (0x84, устройство)
  *      LOGGER_ENABLE_BISS_IRS    - stm32_biss_irs                 (0x85, устройство)
  *      LOGGER_ENABLE_LSM6DSX     - lsm6dsx (accel+gyro)           (0x86, устройство)
+ *      LOGGER_ENABLE_BOOTLOADER  - stm32_eth_bootload (загрузчик)  (0x02, система)
  *      LOGGER_ENABLE_REG         - stm32_reestr (реестр параметров) (0x03, система)
  * ============================================================================
  */
@@ -511,6 +512,169 @@
 #define LOG_CODE_REG_NVM_ERROR     ((uint16_t)((LOG_ADDR_REG << 8) | LOG_OFFSET_REG_NVM_ERROR))
 #endif /* LOGGER_ENABLE_REG */
 
+#ifdef LOGGER_ENABLE_BOOTLOADER
+/* Адресное пространство (старший байт кода), выделенное загрузчику
+ * (stm32_eth_bootload). Коды 0x00-0x7F - сам загрузчик, 0xF0-0xF3 - приложение
+ * (boot_link). Категория СИСТЕМА. Значение val каждого события - в списке
+ * bl_log_codes.h проекта загрузчика. Если включён этот блок, bl_log_codes.h
+ * в проект не подключать (имена LOG_CODE_BOOT_* те же). */
+#define LOG_ADDR_BOOT 0x02U
+
+/* Смещения (младший байт). */
+#define LOG_OFFSET_BOOT_START                0x00U
+#define LOG_OFFSET_BOOT_VERSION              0x01U
+#define LOG_OFFSET_BOOT_PREV_FAULT           0x02U
+#define LOG_OFFSET_BOOT_EARLY_JUMP_FAIL      0x03U
+#define LOG_OFFSET_BOOT_CONFIG_ERROR         0x04U
+#define LOG_OFFSET_BOOT_PREV_FAULT_KIND      0x05U
+#define LOG_OFFSET_BOOT_LOG_SUPPRESSED       0x06U
+#define LOG_OFFSET_BOOT_LOG_REENTRY          0x07U
+#define LOG_OFFSET_BOOT_APP_NONE             0x10U
+#define LOG_OFFSET_BOOT_APP_VERIFIED         0x11U
+#define LOG_OFFSET_BOOT_APP_UNVERIFIED       0x12U
+#define LOG_OFFSET_BOOT_APP_CRC_MISMATCH     0x13U
+#define LOG_OFFSET_BOOT_APP_BAD_VECTOR       0x14U
+#define LOG_OFFSET_BOOT_APP_ECC_ERROR        0x15U
+#define LOG_OFFSET_BOOT_APP_DESC_DAMAGED     0x16U
+#define LOG_OFFSET_BOOT_STAY_REQUESTED       0x20U
+#define LOG_OFFSET_BOOT_STAY_NO_APP          0x21U
+#define LOG_OFFSET_BOOT_COLD_WAIT            0x22U
+#define LOG_OFFSET_BOOT_COLD_NO_LINK         0x23U
+#define LOG_OFFSET_BOOT_IDLE_TIMEOUT         0x24U
+#define LOG_OFFSET_BOOT_JUMP_APP             0x25U
+#define LOG_OFFSET_BOOT_REBOOT               0x26U
+#define LOG_OFFSET_BOOT_APP_CRASH_RESET      0x27U
+#define LOG_OFFSET_BOOT_APP_RETRY_WAIT       0x28U
+#define LOG_OFFSET_BOOT_APP_INVALIDATED      0x29U
+#define LOG_OFFSET_BOOT_APP_SUSPECT_START    0x2AU
+#define LOG_OFFSET_BOOT_SESSION_OPEN         0x30U
+#define LOG_OFFSET_BOOT_SESSION_CLOSED       0x31U
+#define LOG_OFFSET_BOOT_SESSION_BUSY         0x32U
+#define LOG_OFFSET_BOOT_SESSION_TIMEOUT      0x33U
+#define LOG_OFFSET_BOOT_FRAME_ERROR          0x34U
+#define LOG_OFFSET_BOOT_CMD_REJECTED         0x35U
+#define LOG_OFFSET_BOOT_CMD_HELLO            0x36U
+#define LOG_OFFSET_BOOT_CMD_RUN              0x37U
+#define LOG_OFFSET_BOOT_CMD_ABORT            0x38U
+#define LOG_OFFSET_BOOT_CMD_REBOOT           0x39U
+#define LOG_OFFSET_BOOT_AUTH_OK              0x3AU
+#define LOG_OFFSET_BOOT_AUTH_FAIL            0x3BU
+#define LOG_OFFSET_BOOT_CMD_NO_AUTH          0x3CU
+#define LOG_OFFSET_BOOT_AUTH_LOCKED          0x3DU
+#define LOG_OFFSET_BOOT_AUTH_LOCKOUT         0x3EU
+#define LOG_OFFSET_BOOT_REPLY_LOST           0x3FU
+#define LOG_OFFSET_BOOT_UPD_BEGIN            0x40U
+#define LOG_OFFSET_BOOT_UPD_ERASE_SECTOR     0x41U
+#define LOG_OFFSET_BOOT_UPD_ERASE_DONE       0x42U
+#define LOG_OFFSET_BOOT_UPD_ERASE_FAIL       0x43U
+#define LOG_OFFSET_BOOT_UPD_PROGRESS         0x44U
+#define LOG_OFFSET_BOOT_UPD_WRITE_FAIL       0x45U
+#define LOG_OFFSET_BOOT_UPD_BAD_OFFSET       0x46U
+#define LOG_OFFSET_BOOT_UPD_BAD_VECTOR       0x47U
+#define LOG_OFFSET_BOOT_UPD_DATA_DONE        0x48U
+#define LOG_OFFSET_BOOT_UPD_CRC_OK           0x49U
+#define LOG_OFFSET_BOOT_UPD_CRC_FAIL         0x4AU
+#define LOG_OFFSET_BOOT_UPD_DESC_WRITTEN     0x4BU
+#define LOG_OFFSET_BOOT_UPD_VECTORS_WRITTEN  0x4CU
+#define LOG_OFFSET_BOOT_UPD_DONE             0x4DU
+#define LOG_OFFSET_BOOT_UPD_ABORT            0x4EU
+#define LOG_OFFSET_BOOT_UPD_FINAL_CHECK_FAIL 0x4FU
+#define LOG_OFFSET_BOOT_UPD_EXPECT_CRC       0x50U
+#define LOG_OFFSET_BOOT_UPD_APP_VERSION      0x51U
+#define LOG_OFFSET_BOOT_UPD_ERASE_SECTOR_OK  0x52U
+#define LOG_OFFSET_BOOT_UPD_ERASE_TIME       0x53U
+#define LOG_OFFSET_BOOT_UPD_DATA_TIME        0x54U
+#define LOG_OFFSET_BOOT_UPD_END_CMD          0x55U
+#define LOG_OFFSET_BOOT_UPD_VERIFY_OK        0x56U
+#define LOG_OFFSET_BOOT_UPD_TOTAL_TIME       0x57U
+#define LOG_OFFSET_BOOT_UPD_BEGIN_REJECT     0x58U
+#define LOG_OFFSET_BOOT_UPD_FLASH_ERR        0x59U
+#define LOG_OFFSET_BOOT_UPD_VERIFY_READ_FAIL 0x5AU
+#define LOG_OFFSET_BOOT_NET_EVENTS_DROPPED   0x60U
+#define LOG_OFFSET_BOOT_TRANSPORT_ERROR      0x61U
+#define LOG_OFFSET_BOOT_APP_REQUEST_BL       0xF0U
+#define LOG_OFFSET_BOOT_APP_LINK_FRAME_ERROR 0xF1U
+#define LOG_OFFSET_BOOT_APP_LINK_REJECTED    0xF2U
+#define LOG_OFFSET_BOOT_APP_LINK_BUSY        0xF3U
+
+/* Итоговые коды. */
+#define LOG_CODE_BOOT_START                ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_START))
+#define LOG_CODE_BOOT_VERSION              ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_VERSION))
+#define LOG_CODE_BOOT_PREV_FAULT           ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_PREV_FAULT))
+#define LOG_CODE_BOOT_EARLY_JUMP_FAIL      ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_EARLY_JUMP_FAIL))
+#define LOG_CODE_BOOT_CONFIG_ERROR         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_CONFIG_ERROR))
+#define LOG_CODE_BOOT_PREV_FAULT_KIND      ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_PREV_FAULT_KIND))
+#define LOG_CODE_BOOT_LOG_SUPPRESSED       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_LOG_SUPPRESSED))
+#define LOG_CODE_BOOT_LOG_REENTRY          ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_LOG_REENTRY))
+#define LOG_CODE_BOOT_APP_NONE             ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_NONE))
+#define LOG_CODE_BOOT_APP_VERIFIED         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_VERIFIED))
+#define LOG_CODE_BOOT_APP_UNVERIFIED       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_UNVERIFIED))
+#define LOG_CODE_BOOT_APP_CRC_MISMATCH     ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_CRC_MISMATCH))
+#define LOG_CODE_BOOT_APP_BAD_VECTOR       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_BAD_VECTOR))
+#define LOG_CODE_BOOT_APP_ECC_ERROR        ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_ECC_ERROR))
+#define LOG_CODE_BOOT_APP_DESC_DAMAGED     ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_DESC_DAMAGED))
+#define LOG_CODE_BOOT_STAY_REQUESTED       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_STAY_REQUESTED))
+#define LOG_CODE_BOOT_STAY_NO_APP          ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_STAY_NO_APP))
+#define LOG_CODE_BOOT_COLD_WAIT            ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_COLD_WAIT))
+#define LOG_CODE_BOOT_COLD_NO_LINK         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_COLD_NO_LINK))
+#define LOG_CODE_BOOT_IDLE_TIMEOUT         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_IDLE_TIMEOUT))
+#define LOG_CODE_BOOT_JUMP_APP             ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_JUMP_APP))
+#define LOG_CODE_BOOT_REBOOT               ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_REBOOT))
+#define LOG_CODE_BOOT_APP_CRASH_RESET      ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_CRASH_RESET))
+#define LOG_CODE_BOOT_APP_RETRY_WAIT       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_RETRY_WAIT))
+#define LOG_CODE_BOOT_APP_INVALIDATED      ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_INVALIDATED))
+#define LOG_CODE_BOOT_APP_SUSPECT_START    ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_SUSPECT_START))
+#define LOG_CODE_BOOT_SESSION_OPEN         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_SESSION_OPEN))
+#define LOG_CODE_BOOT_SESSION_CLOSED       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_SESSION_CLOSED))
+#define LOG_CODE_BOOT_SESSION_BUSY         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_SESSION_BUSY))
+#define LOG_CODE_BOOT_SESSION_TIMEOUT      ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_SESSION_TIMEOUT))
+#define LOG_CODE_BOOT_FRAME_ERROR          ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_FRAME_ERROR))
+#define LOG_CODE_BOOT_CMD_REJECTED         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_CMD_REJECTED))
+#define LOG_CODE_BOOT_CMD_HELLO            ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_CMD_HELLO))
+#define LOG_CODE_BOOT_CMD_RUN              ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_CMD_RUN))
+#define LOG_CODE_BOOT_CMD_ABORT            ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_CMD_ABORT))
+#define LOG_CODE_BOOT_CMD_REBOOT           ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_CMD_REBOOT))
+#define LOG_CODE_BOOT_AUTH_OK              ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_AUTH_OK))
+#define LOG_CODE_BOOT_AUTH_FAIL            ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_AUTH_FAIL))
+#define LOG_CODE_BOOT_CMD_NO_AUTH          ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_CMD_NO_AUTH))
+#define LOG_CODE_BOOT_AUTH_LOCKED          ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_AUTH_LOCKED))
+#define LOG_CODE_BOOT_AUTH_LOCKOUT         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_AUTH_LOCKOUT))
+#define LOG_CODE_BOOT_REPLY_LOST           ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_REPLY_LOST))
+#define LOG_CODE_BOOT_UPD_BEGIN            ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_BEGIN))
+#define LOG_CODE_BOOT_UPD_ERASE_SECTOR     ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_ERASE_SECTOR))
+#define LOG_CODE_BOOT_UPD_ERASE_DONE       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_ERASE_DONE))
+#define LOG_CODE_BOOT_UPD_ERASE_FAIL       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_ERASE_FAIL))
+#define LOG_CODE_BOOT_UPD_PROGRESS         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_PROGRESS))
+#define LOG_CODE_BOOT_UPD_WRITE_FAIL       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_WRITE_FAIL))
+#define LOG_CODE_BOOT_UPD_BAD_OFFSET       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_BAD_OFFSET))
+#define LOG_CODE_BOOT_UPD_BAD_VECTOR       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_BAD_VECTOR))
+#define LOG_CODE_BOOT_UPD_DATA_DONE        ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_DATA_DONE))
+#define LOG_CODE_BOOT_UPD_CRC_OK           ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_CRC_OK))
+#define LOG_CODE_BOOT_UPD_CRC_FAIL         ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_CRC_FAIL))
+#define LOG_CODE_BOOT_UPD_DESC_WRITTEN     ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_DESC_WRITTEN))
+#define LOG_CODE_BOOT_UPD_VECTORS_WRITTEN  ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_VECTORS_WRITTEN))
+#define LOG_CODE_BOOT_UPD_DONE             ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_DONE))
+#define LOG_CODE_BOOT_UPD_ABORT            ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_ABORT))
+#define LOG_CODE_BOOT_UPD_FINAL_CHECK_FAIL ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_FINAL_CHECK_FAIL))
+#define LOG_CODE_BOOT_UPD_EXPECT_CRC       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_EXPECT_CRC))
+#define LOG_CODE_BOOT_UPD_APP_VERSION      ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_APP_VERSION))
+#define LOG_CODE_BOOT_UPD_ERASE_SECTOR_OK  ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_ERASE_SECTOR_OK))
+#define LOG_CODE_BOOT_UPD_ERASE_TIME       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_ERASE_TIME))
+#define LOG_CODE_BOOT_UPD_DATA_TIME        ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_DATA_TIME))
+#define LOG_CODE_BOOT_UPD_END_CMD          ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_END_CMD))
+#define LOG_CODE_BOOT_UPD_VERIFY_OK        ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_VERIFY_OK))
+#define LOG_CODE_BOOT_UPD_TOTAL_TIME       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_TOTAL_TIME))
+#define LOG_CODE_BOOT_UPD_BEGIN_REJECT     ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_BEGIN_REJECT))
+#define LOG_CODE_BOOT_UPD_FLASH_ERR        ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_FLASH_ERR))
+#define LOG_CODE_BOOT_UPD_VERIFY_READ_FAIL ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_UPD_VERIFY_READ_FAIL))
+#define LOG_CODE_BOOT_NET_EVENTS_DROPPED   ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_NET_EVENTS_DROPPED))
+#define LOG_CODE_BOOT_TRANSPORT_ERROR      ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_TRANSPORT_ERROR))
+#define LOG_CODE_BOOT_APP_REQUEST_BL       ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_REQUEST_BL))
+#define LOG_CODE_BOOT_APP_LINK_FRAME_ERROR ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_LINK_FRAME_ERROR))
+#define LOG_CODE_BOOT_APP_LINK_REJECTED    ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_LINK_REJECTED))
+#define LOG_CODE_BOOT_APP_LINK_BUSY        ((uint16_t)((LOG_ADDR_BOOT << 8) | LOG_OFFSET_BOOT_APP_LINK_BUSY))
+#endif /* LOGGER_ENABLE_BOOTLOADER */
+
 /* ======================================================================== */
 /*  КАТЕГОРИЯ 4/4 - РЕЗЕРВ (0xE0xx-0xFFxx) - пока не используется.          */
 /* ======================================================================== */
@@ -523,6 +687,83 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     /* ------------------------------------------------------------------ */
     { LOG_CODE_SYSTEM_START,     LOGGER_PRIORITY_LOW,  "штатный старт" },
     { LOG_CODE_SYSTEM_HAL_ERROR, LOGGER_PRIORITY_HIGH, "сбой инициализации HAL" },
+#ifdef LOGGER_ENABLE_BOOTLOADER
+    { LOG_CODE_BOOT_START, LOGGER_PRIORITY_MEDIUM, "BL: старт, RCC_RSR" },
+    { LOG_CODE_BOOT_VERSION, LOGGER_PRIORITY_LOW, "BL: версия загрузчика" },
+    { LOG_CODE_BOOT_PREV_FAULT, LOGGER_PRIORITY_HIGH, "BL: прошлый запуск - авария, CFSR" },
+    { LOG_CODE_BOOT_EARLY_JUMP_FAIL, LOGGER_PRIORITY_HIGH, "BL: переход отменён, вектора плохие" },
+    { LOG_CODE_BOOT_CONFIG_ERROR, LOGGER_PRIORITY_HIGH, "BL: настройка, 1-нет транспорта" },
+    { LOG_CODE_BOOT_PREV_FAULT_KIND, LOGGER_PRIORITY_HIGH, "BL: прошлая авария, подряд*256+вид" },
+    { LOG_CODE_BOOT_LOG_SUPPRESSED, LOGGER_PRIORITY_MEDIUM, "BL: лог подавлен, код*65536+шт" },
+    { LOG_CODE_BOOT_LOG_REENTRY, LOGGER_PRIORITY_MEDIUM, "BL: события лога потеряны (рекурсия)" },
+    { LOG_CODE_BOOT_APP_NONE, LOGGER_PRIORITY_MEDIUM, "BL: приложения нет" },
+    { LOG_CODE_BOOT_APP_VERIFIED, LOGGER_PRIORITY_LOW, "BL: приложение проверено, размер" },
+    { LOG_CODE_BOOT_APP_UNVERIFIED, LOGGER_PRIORITY_MEDIUM, "BL: без дескриптора (отладчик?)" },
+    { LOG_CODE_BOOT_APP_CRC_MISMATCH, LOGGER_PRIORITY_HIGH, "BL: CRC32 приложения не совпала" },
+    { LOG_CODE_BOOT_APP_BAD_VECTOR, LOGGER_PRIORITY_HIGH, "BL: плохие вектора приложения, SP" },
+    { LOG_CODE_BOOT_APP_ECC_ERROR, LOGGER_PRIORITY_HIGH, "BL: ECC-ошибка флеш приложения" },
+    { LOG_CODE_BOOT_APP_DESC_DAMAGED, LOGGER_PRIORITY_HIGH, "BL: дескриптор повреждён, адрес" },
+    { LOG_CODE_BOOT_STAY_REQUESTED, LOGGER_PRIORITY_MEDIUM, "BL: приложение просит остаться" },
+    { LOG_CODE_BOOT_STAY_NO_APP, LOGGER_PRIORITY_HIGH, "BL: запускать нечего, жду прошивку" },
+    { LOG_CODE_BOOT_COLD_WAIT, LOGGER_PRIORITY_LOW, "BL: холодный старт, жду ПК, мс" },
+    { LOG_CODE_BOOT_COLD_NO_LINK, LOGGER_PRIORITY_LOW, "BL: связи с ПК нет, запуск" },
+    { LOG_CODE_BOOT_IDLE_TIMEOUT, LOGGER_PRIORITY_MEDIUM, "BL: таймаут бездействия, мс" },
+    { LOG_CODE_BOOT_JUMP_APP, LOGGER_PRIORITY_MEDIUM, "BL: запуск приложения, адрес" },
+    { LOG_CODE_BOOT_REBOOT, LOGGER_PRIORITY_MEDIUM, "BL: перезагрузка по команде" },
+    { LOG_CODE_BOOT_APP_CRASH_RESET, LOGGER_PRIORITY_HIGH, "BL: авария приложения, подряд*256+вид" },
+    { LOG_CODE_BOOT_APP_RETRY_WAIT, LOGGER_PRIORITY_MEDIUM, "BL: жду прошивку перед повтором, мс" },
+    { LOG_CODE_BOOT_APP_INVALIDATED, LOGGER_PRIORITY_HIGH, "BL: приложение отключено, аварий" },
+    { LOG_CODE_BOOT_APP_SUSPECT_START, LOGGER_PRIORITY_MEDIUM, "BL: прошлый запуск не подтверждён" },
+    { LOG_CODE_BOOT_SESSION_OPEN, LOGGER_PRIORITY_MEDIUM, "BL: сеанс открыт, IP" },
+    { LOG_CODE_BOOT_SESSION_CLOSED, LOGGER_PRIORITY_MEDIUM, "BL: сеанс закрыт, 1 - загрузчиком" },
+    { LOG_CODE_BOOT_SESSION_BUSY, LOGGER_PRIORITY_MEDIUM, "BL: второй клиент отклонён, IP" },
+    { LOG_CODE_BOOT_SESSION_TIMEOUT, LOGGER_PRIORITY_HIGH, "BL: клиент молчит, сеанс закрыт" },
+    { LOG_CODE_BOOT_FRAME_ERROR, LOGGER_PRIORITY_HIGH, "BL: битый кадр 1-magic 2-длина 3-CRC" },
+    { LOG_CODE_BOOT_CMD_REJECTED, LOGGER_PRIORITY_MEDIUM, "BL: команда отклонена, cmd*256+код" },
+    { LOG_CODE_BOOT_CMD_HELLO, LOGGER_PRIORITY_LOW, "BL: HELLO, версия протокола" },
+    { LOG_CODE_BOOT_CMD_RUN, LOGGER_PRIORITY_MEDIUM, "BL: команда RUN" },
+    { LOG_CODE_BOOT_CMD_ABORT, LOGGER_PRIORITY_MEDIUM, "BL: команда ABORT, состояние" },
+    { LOG_CODE_BOOT_CMD_REBOOT, LOGGER_PRIORITY_MEDIUM, "BL: команда REBOOT" },
+    { LOG_CODE_BOOT_AUTH_OK, LOGGER_PRIORITY_MEDIUM, "BL: ключ доступа принят" },
+    { LOG_CODE_BOOT_AUTH_FAIL, LOGGER_PRIORITY_HIGH, "BL: НЕВЕРНЫЙ ключ доступа, IP" },
+    { LOG_CODE_BOOT_CMD_NO_AUTH, LOGGER_PRIORITY_HIGH, "BL: команда без ключа отклонена" },
+    { LOG_CODE_BOOT_AUTH_LOCKED, LOGGER_PRIORITY_HIGH, "BL: AUTH заблокирован, осталось мс" },
+    { LOG_CODE_BOOT_AUTH_LOCKOUT, LOGGER_PRIORITY_HIGH, "BL: AUTH блок после неверных ключей, мс" },
+    { LOG_CODE_BOOT_REPLY_LOST, LOGGER_PRIORITY_HIGH, "BL: ответ клиенту потерян, cmd" },
+    { LOG_CODE_BOOT_UPD_BEGIN, LOGGER_PRIORITY_MEDIUM, "BL: начало записи, размер" },
+    { LOG_CODE_BOOT_UPD_ERASE_SECTOR, LOGGER_PRIORITY_LOW, "BL: стирание, банк*256+сектор" },
+    { LOG_CODE_BOOT_UPD_ERASE_DONE, LOGGER_PRIORITY_MEDIUM, "BL: стирание готово, секторов" },
+    { LOG_CODE_BOOT_UPD_ERASE_FAIL, LOGGER_PRIORITY_HIGH, "BL: ошибка стирания, адрес" },
+    { LOG_CODE_BOOT_UPD_PROGRESS, LOGGER_PRIORITY_LOW, "BL: записано байт" },
+    { LOG_CODE_BOOT_UPD_WRITE_FAIL, LOGGER_PRIORITY_HIGH, "BL: ошибка записи, адрес" },
+    { LOG_CODE_BOOT_UPD_BAD_OFFSET, LOGGER_PRIORITY_HIGH, "BL: неверное смещение данных" },
+    { LOG_CODE_BOOT_UPD_BAD_VECTOR, LOGGER_PRIORITY_HIGH, "BL: образ с плохими векторами, SP" },
+    { LOG_CODE_BOOT_UPD_DATA_DONE, LOGGER_PRIORITY_MEDIUM, "BL: данные приняты, размер" },
+    { LOG_CODE_BOOT_UPD_CRC_OK, LOGGER_PRIORITY_MEDIUM, "BL: CRC32 записанного совпала" },
+    { LOG_CODE_BOOT_UPD_CRC_FAIL, LOGGER_PRIORITY_HIGH, "BL: CRC32 записанного НЕ совпала" },
+    { LOG_CODE_BOOT_UPD_DESC_WRITTEN, LOGGER_PRIORITY_LOW, "BL: дескриптор записан, адрес" },
+    { LOG_CODE_BOOT_UPD_VECTORS_WRITTEN, LOGGER_PRIORITY_LOW, "BL: вектора записаны последними" },
+    { LOG_CODE_BOOT_UPD_DONE, LOGGER_PRIORITY_HIGH, "BL: прошивка установлена, CRC32" },
+    { LOG_CODE_BOOT_UPD_ABORT, LOGGER_PRIORITY_HIGH, "BL: запись прервана, причина" },
+    { LOG_CODE_BOOT_UPD_FINAL_CHECK_FAIL, LOGGER_PRIORITY_HIGH, "BL: итоговая проверка не прошла" },
+    { LOG_CODE_BOOT_UPD_EXPECT_CRC, LOGGER_PRIORITY_MEDIUM, "BL: ожидаемая CRC32 образа" },
+    { LOG_CODE_BOOT_UPD_APP_VERSION, LOGGER_PRIORITY_LOW, "BL: версия нового приложения" },
+    { LOG_CODE_BOOT_UPD_ERASE_SECTOR_OK, LOGGER_PRIORITY_LOW, "BL: сектор стёрт, мс" },
+    { LOG_CODE_BOOT_UPD_ERASE_TIME, LOGGER_PRIORITY_LOW, "BL: стирание всего, мс" },
+    { LOG_CODE_BOOT_UPD_DATA_TIME, LOGGER_PRIORITY_LOW, "BL: приём и запись данных, мс" },
+    { LOG_CODE_BOOT_UPD_END_CMD, LOGGER_PRIORITY_LOW, "BL: команда END, принято байт" },
+    { LOG_CODE_BOOT_UPD_VERIFY_OK, LOGGER_PRIORITY_MEDIUM, "BL: итоговая проверка ОК, CRC32" },
+    { LOG_CODE_BOOT_UPD_TOTAL_TIME, LOGGER_PRIORITY_MEDIUM, "BL: прошивка заняла, мс" },
+    { LOG_CODE_BOOT_UPD_BEGIN_REJECT, LOGGER_PRIORITY_HIGH, "BL: BEGIN отклонён, код ошибки" },
+    { LOG_CODE_BOOT_UPD_FLASH_ERR, LOGGER_PRIORITY_HIGH, "BL: ошибка флеш, операция*256+код" },
+    { LOG_CODE_BOOT_UPD_VERIFY_READ_FAIL, LOGGER_PRIORITY_HIGH, "BL: ошибка чтения флеш при проверке" },
+    { LOG_CODE_BOOT_NET_EVENTS_DROPPED, LOGGER_PRIORITY_MEDIUM, "BL: события не ушли в сеть, шт" },
+    { LOG_CODE_BOOT_TRANSPORT_ERROR, LOGGER_PRIORITY_HIGH, "BL: ошибка транспорта (send)" },
+    { LOG_CODE_BOOT_APP_REQUEST_BL, LOGGER_PRIORITY_HIGH, "APP: уход в загрузчик по команде ПК" },
+    { LOG_CODE_BOOT_APP_LINK_FRAME_ERROR, LOGGER_PRIORITY_HIGH, "APP: boot_link, битый кадр 1-magic 2-длина 3-CRC" },
+    { LOG_CODE_BOOT_APP_LINK_REJECTED, LOGGER_PRIORITY_MEDIUM, "APP: boot_link, команда отклонена, cmd" },
+    { LOG_CODE_BOOT_APP_LINK_BUSY, LOGGER_PRIORITY_MEDIUM, "APP: boot_link, второй клиент отклонён" },
+#endif /* LOGGER_ENABLE_BOOTLOADER */
 #ifdef LOGGER_ENABLE_REG
     { LOG_CODE_REG_INIT,          LOGGER_PRIORITY_LOW,    "Реестр инициализирован" },
     { LOG_CODE_REG_INIT_FAIL,     LOGGER_PRIORITY_HIGH,   "Ошибка инициализации реестра" },
@@ -762,7 +1003,7 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
 /*  справа). В память/флеш не пишется: группа определяется старшим байтом   */
 /*  кода. Группы, не входящие в библиотеку (загрузчик, проект), добавляются  */
 /*  через LOGGER_EXTRA_GROUP_NAMES до #include "logger_codes.h", например:  */
-/*      #define LOGGER_EXTRA_GROUP_NAMES { 0x02U, "BOOTLDR " },             */
+/*      #define LOGGER_EXTRA_GROUP_NAMES { 0xE0U, "MYGROUP " },             */
 /* ------------------------------------------------------------------------ */
 
 typedef struct
@@ -775,6 +1016,9 @@ static const LOGGER_GroupName_t LOGGER_GroupNames[] =
 {
     { 0x00U, "LOGGER  " },
     { LOG_ADDR_SYSTEM, "SYSTEM  " },
+#ifdef LOGGER_ENABLE_BOOTLOADER
+    { LOG_ADDR_BOOT, "BOOTLDR " },
+#endif
 #ifdef LOGGER_ENABLE_REG
     { LOG_ADDR_REG, "REGISTRY" },
 #endif

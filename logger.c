@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.16
+ * @version 1.17
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
