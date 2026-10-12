@@ -5,7 +5,7 @@
  *          Полное описание архитектуры и API - см. README.md/API_REFERENCE.md.
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.17
+ * @version 1.18
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -140,6 +140,24 @@ typedef void (*LOGGER_ConsoleWriteFn_t)(void *context, uint16_t code, uint16_t s
                                          uint32_t systick, uint32_t rtc_time,
                                          const char *description);
 
+/** Длина строки текстового приёмника в байтах, БЕЗ завершающего '\0'.
+ *  Всегда одинакова: 64 (префикс: RTC, мс, группа, приоритет, код, src, val)
+ *  + LOGGER_TEXT_DESC_FIELD_BYTES (описание, добитое пробелами) + 2 (CRLF). */
+#define LOGGER_TEXT_DESC_FIELD_BYTES 128U
+#define LOGGER_TEXT_LINE_LEN         (64U + LOGGER_TEXT_DESC_FIELD_BYTES + 2U)
+
+/**
+ * @brief  Функция приёма одной читаемой строки лога фиксированной длины
+ *         LOGGER_TEXT_LINE_LEN (колонки выровнены, пробелы в конце, CRLF).
+ *         Вызывается на каждую запись с приоритетом >= text_min_priority.
+ *         Должна быть быстрой и не блокирующей (копирует строку в буфер
+ *         файловой системы).
+ * @param  context  значение text_context, переданное в LOGGER_Init()
+ * @param  line     строка (с '\0' после CRLF) - только на время вызова
+ * @param  length   всегда LOGGER_TEXT_LINE_LEN
+ */
+typedef void (*LOGGER_TextWriteFn_t)(void *context, const char *line, uint32_t length);
+
 /**
  * @brief  Функция получения текущего времени RTC, предоставляется
  *         пользователем при инициализации, ТОЛЬКО если в проекте реально
@@ -195,6 +213,22 @@ typedef struct
     /** Аналогично для ВЫСОКОГО приоритета. Рекомендуется <= threshold_medium -
      *  логи высокого приоритета обычно должны попадать в память чаще. */
     uint8_t threshold_high;
+
+    /** Минимальный приоритет записи, попадающей в БИНАРНЫЙ буфер/write_fn:
+     *  LOGGER_PRIORITY_LOW (0, по умолчанию) - всё; MEDIUM - medium+high;
+     *  HIGH - только высокие (ошибки). Записи ниже порога в память не
+     *  пишутся (вывод в консоль/SWO это не затрагивает). */
+    LOGGER_Priority_t write_min_priority;
+
+    /** Функция приёма читаемой текстовой строки фиксированной длины
+     *  (для записи в .txt на FAT/SD/USB). NULL - текстовый приёмник выключен. */
+    LOGGER_TextWriteFn_t text_fn;
+
+    /** Указатель, который будет передан text_fn первым аргументом. Может быть NULL. */
+    void *text_context;
+
+    /** Минимальный приоритет записи, отправляемой в text_fn (как write_min_priority). */
+    LOGGER_Priority_t text_min_priority;
 } LOGGER_Config_t;
 
 /* ------------------------------------------------------------------------ */
@@ -259,6 +293,20 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config);
 size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
                                  LOGGER_Priority_t priority, int32_t value, uint32_t systick,
                                  uint32_t rtc_time, const char *description);
+
+/**
+ * @brief  Формирует строку ФИКСИРОВАННОЙ длины LOGGER_TEXT_LINE_LEN (формат
+ *         как у LOGGER_FormatConsoleLine, но описание добито пробелами до 64
+ *         символов и далее до постоянной длины в байтах). Используется самим
+ *         логгером для text_fn; доступна и пользователю.
+ * @param  buf  буфер результата, не менее LOGGER_TEXT_LINE_LEN + 1 байт
+ * @param  size размер buf
+ * @return LOGGER_TEXT_LINE_LEN, если буфер достаточен (иначе - как snprintf)
+ *         остальные аргументы - как у LOGGER_FormatConsoleLine()
+ */
+size_t LOGGER_FormatTextLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
+                              LOGGER_Priority_t priority, int32_t value, uint32_t systick,
+                              uint32_t rtc_time, const char *description);
 
 /* ------------------------------------------------------------------------ */
 /*  Приём лога - главная горячая функция                                    */

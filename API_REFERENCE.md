@@ -115,6 +115,12 @@ typedef uint32_t (*LOGGER_RtcTimeFn_t)(void *context);
 
 Пороги учитываются, только если `write_fn != NULL`. Рекомендуется `threshold_high <= threshold_medium <= threshold_low` - логи более высокого приоритета обычно должны попадать в память чаще.
 
+Три приёмника логов: (1) потоковый вывод `console_fn`/SWO; (2) бинарная запись `write_fn`, фильтр `write_min_priority` (LOW - всё, MEDIUM - medium+high, HIGH - только ошибки); (3) читаемый текст `text_fn` (строка фиксированной длины `LOGGER_TEXT_LINE_LEN` = 194 байта, колонки выровнены, пробелы в конце, CRLF) с фильтром `text_min_priority`. Поля `text_context`, `text_fn`, `write_min_priority`, `text_min_priority` при нулевой инициализации означают: текст выключен, в память пишется всё.
+
+### `size_t LOGGER_FormatTextLine(char *buf, size_t size, uint16_t code, uint16_t source_id, LOGGER_Priority_t priority, int32_t value, uint32_t systick, uint32_t rtc_time, const char *description)`
+
+Как `LOGGER_FormatConsoleLine`, но строка всегда `LOGGER_TEXT_LINE_LEN` байт (описание добито пробелами до 64 символов, затем до постоянной длины). Буфер не менее `LOGGER_TEXT_LINE_LEN + 1`.
+
 ---
 
 ## Служебные коды библиотеки

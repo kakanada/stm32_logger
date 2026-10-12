@@ -6,7 +6,7 @@
  *          и хостовой сторон библиотеки.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.17
+ * @version 1.18
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -45,6 +45,7 @@
  *      LOGGER_ENABLE_CANMGR      - can_manager                  (0x41, периферия/CAN)
  *      LOGGER_ENABLE_USB_ETH     - usb_eth                       (0x42, периферия/USB)
  *      LOGGER_ENABLE_USB_DEV     - usb_eth v2.0 (USB + COM)      (0x43, периферия/USB)
+ *      LOGGER_ENABLE_FAT         - fat (FAT32, журнал на SD/USB)  (0x44, периферия/накопитель)
  *      LOGGER_ENABLE_LOAD_PWM    - stm32_load_pwm                (0x81, устройство)
  *      LOGGER_ENABLE_RC_BUS      - rc_bus + rc_bus_telemetry      (0x82, устройство)
  *      LOGGER_ENABLE_VESC_SERVO  - can_vesc_servo_stm32           (0x83, устройство)
@@ -235,6 +236,28 @@
 #define LOG_CODE_USB_DEV_TUSB_ASSERT ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_TUSB_ASSERT))
 #define LOG_CODE_USB_DEV_LOG_SUPPRESSED ((uint16_t)((LOG_ADDR_USB_DEV << 8) | LOG_OFFSET_USB_DEV_LOG_SUPPRESSED))
 #endif /* LOGGER_ENABLE_USB_DEV */
+
+#ifdef LOGGER_ENABLE_FAT
+#define LOG_ADDR_FAT 0x44U
+#define LOG_OFFSET_FAT_MOUNTED 0x00U
+#define LOG_OFFSET_FAT_MOUNT_ERR 0x01U
+#define LOG_OFFSET_FAT_IO_ERR 0x02U
+#define LOG_OFFSET_FAT_IO_TIMEOUT 0x03U
+#define LOG_OFFSET_FAT_LOG_START 0x04U
+#define LOG_OFFSET_FAT_LOG_ROTATE 0x05U
+#define LOG_OFFSET_FAT_LOG_OVERRUN 0x06U
+#define LOG_OFFSET_FAT_LOG_FAULT 0x07U
+#define LOG_OFFSET_FAT_FILE_REMOVED 0x08U
+#define LOG_CODE_FAT_MOUNTED ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_MOUNTED))
+#define LOG_CODE_FAT_MOUNT_ERR ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_MOUNT_ERR))
+#define LOG_CODE_FAT_IO_ERR ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_IO_ERR))
+#define LOG_CODE_FAT_IO_TIMEOUT ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_IO_TIMEOUT))
+#define LOG_CODE_FAT_LOG_START ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_LOG_START))
+#define LOG_CODE_FAT_LOG_ROTATE ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_LOG_ROTATE))
+#define LOG_CODE_FAT_LOG_OVERRUN ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_LOG_OVERRUN))
+#define LOG_CODE_FAT_LOG_FAULT ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_LOG_FAULT))
+#define LOG_CODE_FAT_FILE_REMOVED ((uint16_t)((LOG_ADDR_FAT << 8) | LOG_OFFSET_FAT_FILE_REMOVED))
+#endif /* LOGGER_ENABLE_FAT */
 
 /* ======================================================================== */
 /*  КАТЕГОРИЯ 3/4 - ВНЕШНИЕ УСТРОЙСТВА/ДАТЧИКИ на периферии (0x80xx-0xDFxx) */
@@ -856,6 +879,17 @@ static const LOGGER_LogEntry_t LOGGER_LogTable[] =
     { LOG_CODE_USB_DEV_TUSB_ASSERT, LOGGER_PRIORITY_HIGH, "внутренняя ошибка TinyUSB" },
     { LOG_CODE_USB_DEV_LOG_SUPPRESSED, LOGGER_PRIORITY_MEDIUM, "записи подавлены (частота/повтор)" },
 #endif /* LOGGER_ENABLE_USB_DEV */
+#ifdef LOGGER_ENABLE_FAT
+    { LOG_CODE_FAT_MOUNTED, LOGGER_PRIORITY_MEDIUM, "Том FAT32 смонтирован" },
+    { LOG_CODE_FAT_MOUNT_ERR, LOGGER_PRIORITY_HIGH, "Ошибка монтирования FAT" },
+    { LOG_CODE_FAT_IO_ERR, LOGGER_PRIORITY_HIGH, "Ошибка обмена с картой" },
+    { LOG_CODE_FAT_IO_TIMEOUT, LOGGER_PRIORITY_HIGH, "Таймаут обмена с картой" },
+    { LOG_CODE_FAT_LOG_START, LOGGER_PRIORITY_MEDIUM, "Журнал начал файл" },
+    { LOG_CODE_FAT_LOG_ROTATE, LOGGER_PRIORITY_LOW, "Журнал перешёл в новый файл" },
+    { LOG_CODE_FAT_LOG_OVERRUN, LOGGER_PRIORITY_MEDIUM, "Потеря записей журнала" },
+    { LOG_CODE_FAT_LOG_FAULT, LOGGER_PRIORITY_HIGH, "Журнал остановлен ошибкой" },
+    { LOG_CODE_FAT_FILE_REMOVED, LOGGER_PRIORITY_LOW, "Удалён лишний файл журнала" },
+#endif /* LOGGER_ENABLE_FAT */
 
     /* ------------------------------------------------------------------ */
     /*  ВНЕШНИЕ УСТРОЙСТВА/ДАТЧИКИ на периферии (0x80xx-0xDFxx).           */
@@ -1030,6 +1064,9 @@ static const LOGGER_GroupName_t LOGGER_GroupNames[] =
 #endif
 #ifdef LOGGER_ENABLE_USB_DEV
     { LOG_ADDR_USB_DEV, "USB_DEV " },
+#endif
+#ifdef LOGGER_ENABLE_FAT
+    { LOG_ADDR_FAT, "FAT32   " },
 #endif
 #ifdef LOGGER_ENABLE_LOAD_PWM
     { LOG_ADDR_LOAD_PWM, "LOAD_PWM" },

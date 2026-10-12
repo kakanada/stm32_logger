@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.17
+ * @version 1.18
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -311,10 +311,13 @@ static char logger_priority_letter(LOGGER_Priority_t priority)
  * @param  value       значение переменной
  * @param  systick     HAL_GetTick() на момент события
  * @param  rtc_time    Unix-время RTC на момент события, либо 0
- * @param  description текстовое описание кода, либо NULL */
+ * @param  description текстовое описание кода, либо NULL
+ * @param  fixed       1 - строка фиксированной длины LOGGER_TEXT_LINE_LEN байт
+ *                      (описание добивается пробелами до 64 символов, затем до
+ *                      постоянной длины в байтах); 0 - без добивки */
 static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_id,
                                 LOGGER_Priority_t priority, int32_t value, uint32_t systick,
-                                uint32_t rtc_time, const char *description)
+                                uint32_t rtc_time, const char *description, uint8_t fixed)
 {
     char rtc_text[LOGGER_RTC_TEXT_WIDTH + 1U];
     LOGGER_UnixTimeToText(rtc_time, rtc_text);
@@ -332,7 +335,33 @@ static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_i
     logger_out_putc(o, ' ');
     logger_out_int32(o, value, 11U);
     logger_out_putc(o, ' ');
-    logger_out_puts(o, (description != NULL) ? description : "???");
+    const char *text = (description != NULL) ? description : "???";
+    logger_out_puts(o, text);
+    if (fixed != 0U)
+    {
+        /* Ширина в символах: байты-продолжения UTF-8 (10xxxxxx) не считаются. */
+        uint32_t chars = 0U;
+        uint32_t bytes = 0U;
+        for (const char *c = text; *c != '\0'; c++)
+        {
+            bytes++;
+            if (((uint8_t)*c & 0xC0U) != 0x80U)
+            {
+                chars++;
+            }
+        }
+        uint32_t pad_chars = (chars < LOGGER_MAX_DESCRIPTION_LENGTH) ? (LOGGER_MAX_DESCRIPTION_LENGTH - chars) : 0U;
+        for (uint32_t i = 0U; i < pad_chars; i++)
+        {
+            logger_out_putc(o, ' ');
+        }
+        /* Добивка до постоянной длины поля в байтах (хвостовые пробелы невидимы). */
+        uint32_t used = bytes + pad_chars;
+        for (uint32_t i = used; i < LOGGER_TEXT_DESC_FIELD_BYTES; i++)
+        {
+            logger_out_putc(o, ' ');
+        }
+    }
     logger_out_puts(o, "\r\n");
 }
 #ifndef LOGGER_NO_ITM
@@ -349,7 +378,7 @@ static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority
                                const char *description)
 {
     logger_out_t out = { NULL, 0U, 0U, 0U };
-    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description);
+    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description, 0U);
 }
 #endif /* !LOGGER_NO_ITM */
 
@@ -370,7 +399,34 @@ size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t 
 {
     logger_out_t out = { buf, size, 0U, 1U };
 
-    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description);
+    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description, 0U);
+
+    if ((buf != NULL) && (size > 0U))
+    {
+        buf[(out.len < size) ? out.len : (size - 1U)] = '\0';
+    }
+    return out.len;
+}
+
+/** @brief Формирует строку фиксированной длины LOGGER_TEXT_LINE_LEN для
+ *         текстового приёмника (text_fn) - см. описание в logger.h.
+ * @param  buf         буфер результата (>= LOGGER_TEXT_LINE_LEN + 1 байт)
+ * @param  size        размер buf в байтах
+ * @param  code        код лога
+ * @param  source_id   идентификатор источника события
+ * @param  priority    приоритет кода
+ * @param  value       значение переменной
+ * @param  systick     HAL_GetTick() на момент события
+ * @param  rtc_time    показание RTC на момент события, либо 0
+ * @param  description текстовое описание кода, либо NULL
+ * @return длина полной строки без '\0' (всегда LOGGER_TEXT_LINE_LEN) */
+size_t LOGGER_FormatTextLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
+                              LOGGER_Priority_t priority, int32_t value, uint32_t systick,
+                              uint32_t rtc_time, const char *description)
+{
+    logger_out_t out = { buf, size, 0U, 1U };
+
+    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description, 1U);
 
     if ((buf != NULL) && (size > 0U))
     {
@@ -842,7 +898,16 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
     }
 #endif
 
-    if ((persist != 0U) && s_buffering_active && (entry != NULL))
+    if ((persist != 0U) && (s_config.text_fn != NULL) && (priority >= s_config.text_min_priority))
+    {
+        char line[LOGGER_TEXT_LINE_LEN + 1U];
+        (void)LOGGER_FormatTextLine(line, sizeof(line), code, source_id, priority, value,
+                                     systick, rtc_time, description);
+        s_config.text_fn(s_config.text_context, line, (uint32_t)LOGGER_TEXT_LINE_LEN);
+    }
+
+    if ((persist != 0U) && s_buffering_active && (entry != NULL) &&
+        (priority >= s_config.write_min_priority))
     {
         logger_buffer_push(entry->code, priority, source_id, value, systick, rtc_time);
     }
@@ -954,6 +1019,12 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config)
             /* таблица не отсортирована по возрастанию либо есть повтор кода */
             return logger_init_fail(config, LOGGER_INIT_FAIL_NOT_SORTED, entry->code);
         }
+    }
+
+    if (((uint32_t)config->write_min_priority >= LOGGER_PRIORITY_COUNT) ||
+        ((uint32_t)config->text_min_priority >= LOGGER_PRIORITY_COUNT))
+    {
+        return logger_init_fail(config, LOGGER_INIT_FAIL_BAD_PRIORITY, 0U);
     }
 
     if (config->write_fn != NULL)
