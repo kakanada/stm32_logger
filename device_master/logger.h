@@ -5,7 +5,7 @@
  *          Полное описание архитектуры и API - см. README.md/API_REFERENCE.md.
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.18
+ * @version 2.0
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -126,6 +126,7 @@ typedef void (*LOGGER_MemoryWriteFn_t)(void *context, const uint8_t *data, uint3
  *         SWO. Вызывается на каждый LOGGER_Log()/LOGGER_Mark(), должна быть
  *         быстрой.
  * @param  context      значение console_context, переданное в LOGGER_Init()
+ * @param  node_id      0 - запись самого master; 1..255 - запись пришла от slave с этим id
  * @param  code         код лога
  * @param  source_id    идентификатор источника события (из LOGGER_Log())
  * @param  priority     приоритет лога (из таблицы кодов)
@@ -135,16 +136,16 @@ typedef void (*LOGGER_MemoryWriteFn_t)(void *context, const uint8_t *data, uint3
  * @param  description  текстовое описание из таблицы кодов (NULL, если код
  *                       не найден в таблице)
  */
-typedef void (*LOGGER_ConsoleWriteFn_t)(void *context, uint16_t code, uint16_t source_id,
+typedef void (*LOGGER_ConsoleWriteFn_t)(void *context, uint8_t node_id, uint16_t code, uint16_t source_id,
                                          LOGGER_Priority_t priority, int32_t value,
                                          uint32_t systick, uint32_t rtc_time,
                                          const char *description);
 
 /** Длина строки текстового приёмника в байтах, БЕЗ завершающего '\0'.
- *  Всегда одинакова: 64 (префикс: RTC, мс, группа, приоритет, код, src, val)
+ *  Всегда одинакова: 68 (префикс: RTC, мс, узел, группа, приоритет, код, src, val)
  *  + LOGGER_TEXT_DESC_FIELD_BYTES (описание, добитое пробелами) + 2 (CRLF). */
 #define LOGGER_TEXT_DESC_FIELD_BYTES 128U
-#define LOGGER_TEXT_LINE_LEN         (64U + LOGGER_TEXT_DESC_FIELD_BYTES + 2U)
+#define LOGGER_TEXT_LINE_LEN         (68U + LOGGER_TEXT_DESC_FIELD_BYTES + 2U)
 
 /**
  * @brief  Функция приёма одной читаемой строки лога фиксированной длины
@@ -281,6 +282,7 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config);
  * @param  buf         буфер результата (может быть NULL при size == 0 -
  *                      тогда только подсчёт длины)
  * @param  size        размер buf в байтах
+ * @param  node_id     0 - master, 1..255 - slave (как у console_fn)
  * @param  code        код лога (аргументы - те же, что получает console_fn)
  * @param  source_id   идентификатор источника события
  * @param  priority    приоритет кода
@@ -290,7 +292,7 @@ HAL_StatusTypeDef LOGGER_Init(const LOGGER_Config_t *config);
  * @param  description текстовое описание кода, либо NULL (выводится "???")
  * @return длина полной строки без '\0'; если >= size - строка обрезана
  */
-size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
+size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint8_t node_id, uint16_t code, uint16_t source_id,
                                  LOGGER_Priority_t priority, int32_t value, uint32_t systick,
                                  uint32_t rtc_time, const char *description);
 
@@ -301,10 +303,11 @@ size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t 
  *         логгером для text_fn; доступна и пользователю.
  * @param  buf  буфер результата, не менее LOGGER_TEXT_LINE_LEN + 1 байт
  * @param  size размер buf
+ * @param  size размер buf
  * @return LOGGER_TEXT_LINE_LEN, если буфер достаточен (иначе - как snprintf)
  *         остальные аргументы - как у LOGGER_FormatConsoleLine()
  */
-size_t LOGGER_FormatTextLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
+size_t LOGGER_FormatTextLine(char *buf, size_t size, uint8_t node_id, uint16_t code, uint16_t source_id,
                               LOGGER_Priority_t priority, int32_t value, uint32_t systick,
                               uint32_t rtc_time, const char *description);
 
@@ -454,6 +457,64 @@ uint16_t LOGGER_GetBufferHighWater(void);
  *         Безопасно из любого контекста.
  */
 uint32_t LOGGER_GetErrorCount(uint16_t code);
+
+/* ------------------------------------------------------------------------ */
+/*  Приём записей от slave (device_slave) - в общий журнал master            */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * @brief  Принимает кадр от slave и кладёт его в общий журнал: вывод в
+ *         консоль/SWO, text_fn и (по порогам) бинарный буфер - так же, как
+ *         собственные записи master, но с node_id slave. Время записи - момент
+ *         вызова этой функции (HAL_GetTick() и RTC master), синхронизации
+ *         времени со slave нет. Приоритет и описание берутся из таблицы кодов
+ *         master (logger_codes.h) - таблица master должна содержать группы всех slave.
+ *
+ *         Пропуск номеров seq относительно предыдущего кадра этого slave
+ *         регистрируется служебной записью LOGGER_INTERNAL_CODE_REMOTE_LOST
+ *         (source_id = сколько кадров пропущено) и считается в
+ *         LOGGER_GetRemoteLost(). Первый кадр узла после старта master
+ *         проверкой не охватывается. Перезапуск slave (seq снова с 0) выглядит
+ *         как пропуск - это нормально, подсчёт приблизительный.
+ *
+ *         Вызывается из любого контекста (в том числе из обработчика приёма
+ *         CAN/UART): без блокирующих ожиданий в ISR, без malloc.
+ * @param  frame кадр (node_id 1..255; кадр с node_id == 0 игнорируется)
+ */
+void LOGGER_PushRemote(const LOGGER_Frame_t *frame);
+
+/** Разборщик потока байт (UART/SPI) в кадры slave - состояние, статика
+ *  у пользователя (по одному на каждый входной поток). */
+typedef struct
+{
+    uint8_t  index;                          /**< сколько байт текущего кадра накоплено */
+    uint8_t  buf[LOGGER_WIRE_STREAM_SIZE];   /**< накопленные байты кадра */
+    uint32_t crc_errors;                     /**< кадров, отброшенных по CRC, с момента инициализации */
+} LOGGER_StreamParser_t;
+
+/**
+ * @brief  Обнуляет разборщик потока.
+ * @param  parser разборщик
+ */
+void LOGGER_StreamParserInit(LOGGER_StreamParser_t *parser);
+
+/**
+ * @brief  Скармливает разборщику принятые байты: ищет LOGGER_WIRE_SYNC,
+ *         собирает кадр LOGGER_WIRE_STREAM_SIZE, проверяет CRC16 и передаёт
+ *         верный кадр в LOGGER_PushRemote(). При ошибке CRC пересинхронизируется
+ *         по следующему LOGGER_WIRE_SYNC. Можно вызывать из ISR приёма.
+ * @param  parser разборщик
+ * @param  data   принятые байты
+ * @param  length число байт
+ */
+void LOGGER_StreamFeed(LOGGER_StreamParser_t *parser, const uint8_t *data, uint32_t length);
+
+/**
+ * @brief  Сколько кадров slave потеряно на линии (по пропускам seq) с момента старта.
+ * @param  node_id id slave
+ * @return число потерянных кадров (насыщается на 65535); 0 для node_id == 0
+ */
+uint32_t LOGGER_GetRemoteLost(uint8_t node_id);
 
 #ifdef __cplusplus
 }

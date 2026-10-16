@@ -4,7 +4,7 @@
  * @brief   Реализация хостового декодера логов (см. log_decoder.h).
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.18
+ * @version 2.0
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -129,8 +129,8 @@ size_t LOGDEC_FormatLine(char *buf, size_t size, const LOGDEC_DecodedRecord_t *r
     }
 
     LOGGER_UnixTimeToText(rec->rtc_time, rtc_text);
-    n = snprintf(buf, size, "%s %8lu %s %c 0x%04X %04X %11ld %s",
-                 rtc_text, (unsigned long)rec->systick, LOGDEC_GetGroupName(rec->code), prio,
+    n = snprintf(buf, size, "%s %8lu %3u %s %c 0x%04X %04X %11ld %s",
+                 rtc_text, (unsigned long)rec->systick, (unsigned)rec->node_id, LOGDEC_GetGroupName(rec->code), prio,
                  (unsigned)rec->code, (unsigned)rec->source_id, (long)rec->value,
                  (rec->description != NULL) ? rec->description : "???");
     return (n > 0) ? (size_t)n : 0U;
@@ -345,6 +345,7 @@ bool LOGDEC_Decode(const uint8_t *data, size_t data_length,
         out_records[i].value      = raw.value;
         out_records[i].systick    = raw.systick;
         out_records[i].rtc_time   = raw.rtc_time;
+        out_records[i].node_id    = raw.node_id;
         out_records[i].priority    = (entry != NULL) ? entry->priority    : LOGGER_PRIORITY_HIGH;
         out_records[i].description = (entry != NULL) ? entry->description : NULL;
     }

@@ -4,7 +4,7 @@
  * @brief   Реализация библиотеки логирования (см. logger.h).
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.18
+ * @version 2.0
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -302,9 +302,10 @@ static char logger_priority_letter(LOGGER_Priority_t priority)
 
 /** @brief Формирует строку лога в приёмник - единый формат SWO и
  *         LOGGER_FormatConsoleLine() (колонки фиксированной ширины):
- *         "<RTC,19> <мс,8> <ГРУППА,8> <L|M|H> 0x<код,4> <src,4> <val,11> <описание>\r\n".
+ *         "<RTC,19> <мс,8> <узел,3> <ГРУППА,8> <L|M|H> 0x<код,4> <src,4> <val,11> <описание>+CRLF".
  *         RTC - "ГГГГ-ММ-ДД ЧЧ:ММ:СС" из Unix-времени, при rtc_time == 0 - 19 пробелов.
  * @param  o           приёмник
+ * @param  node_id     0 - master, 1..255 - slave
  * @param  code        код лога
  * @param  source_id   идентификатор источника события
  * @param  priority    приоритет кода
@@ -315,7 +316,7 @@ static char logger_priority_letter(LOGGER_Priority_t priority)
  * @param  fixed       1 - строка фиксированной длины LOGGER_TEXT_LINE_LEN байт
  *                      (описание добивается пробелами до 64 символов, затем до
  *                      постоянной длины в байтах); 0 - без добивки */
-static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_id,
+static void logger_format_line(logger_out_t *o, uint8_t node_id, uint16_t code, uint16_t source_id,
                                 LOGGER_Priority_t priority, int32_t value, uint32_t systick,
                                 uint32_t rtc_time, const char *description, uint8_t fixed)
 {
@@ -324,6 +325,8 @@ static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_i
     logger_out_puts(o, rtc_text);
     logger_out_putc(o, ' ');
     logger_out_uint32(o, systick, 8U);
+    logger_out_putc(o, ' ');
+    logger_out_uint32(o, node_id, 3U);
     logger_out_putc(o, ' ');
     logger_out_puts(o, (code <= LOGGER_INTERNAL_CODE_MAX) ? "LOGGER  " : LOGGER_GetGroupName(code));
     logger_out_putc(o, ' ');
@@ -366,6 +369,7 @@ static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_i
 }
 #ifndef LOGGER_NO_ITM
 /** @brief Вывод по умолчанию в SWO - используется, если console_fn не задана.
+ * @param  node_id     0 - master, 1..255 - slave
  * @param  code        код лога
  * @param  source_id   идентификатор источника события
  * @param  priority    приоритет кода
@@ -373,18 +377,19 @@ static void logger_format_line(logger_out_t *o, uint16_t code, uint16_t source_i
  * @param  systick     HAL_GetTick() на момент события
  * @param  rtc_time    показание RTC на момент события, либо 0
  * @param  description текстовое описание кода, либо NULL */
-static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority_t priority,
+static void logger_swo_output(uint8_t node_id, uint16_t code, uint16_t source_id, LOGGER_Priority_t priority,
                                int32_t value, uint32_t systick, uint32_t rtc_time,
                                const char *description)
 {
     logger_out_t out = { NULL, 0U, 0U, 0U };
-    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description, 0U);
+    logger_format_line(&out, node_id, code, source_id, priority, value, systick, rtc_time, description, 0U);
 }
 #endif /* !LOGGER_NO_ITM */
 
 /** @brief Формирует строку лога в буфер - см. полное описание в logger.h.
  * @param  buf         буфер результата (может быть NULL при size == 0)
  * @param  size        размер buf в байтах
+ * @param  node_id     0 - master, 1..255 - slave
  * @param  code        код лога
  * @param  source_id   идентификатор источника события
  * @param  priority    приоритет кода
@@ -393,13 +398,13 @@ static void logger_swo_output(uint16_t code, uint16_t source_id, LOGGER_Priority
  * @param  rtc_time    показание RTC на момент события, либо 0
  * @param  description текстовое описание кода, либо NULL
  * @return длина полной строки без '\0' (как у snprintf) */
-size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
+size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint8_t node_id, uint16_t code, uint16_t source_id,
                                  LOGGER_Priority_t priority, int32_t value, uint32_t systick,
                                  uint32_t rtc_time, const char *description)
 {
     logger_out_t out = { buf, size, 0U, 1U };
 
-    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description, 0U);
+    logger_format_line(&out, node_id, code, source_id, priority, value, systick, rtc_time, description, 0U);
 
     if ((buf != NULL) && (size > 0U))
     {
@@ -412,6 +417,7 @@ size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t 
  *         текстового приёмника (text_fn) - см. описание в logger.h.
  * @param  buf         буфер результата (>= LOGGER_TEXT_LINE_LEN + 1 байт)
  * @param  size        размер buf в байтах
+ * @param  node_id     0 - master, 1..255 - slave
  * @param  code        код лога
  * @param  source_id   идентификатор источника события
  * @param  priority    приоритет кода
@@ -420,13 +426,13 @@ size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t 
  * @param  rtc_time    показание RTC на момент события, либо 0
  * @param  description текстовое описание кода, либо NULL
  * @return длина полной строки без '\0' (всегда LOGGER_TEXT_LINE_LEN) */
-size_t LOGGER_FormatTextLine(char *buf, size_t size, uint16_t code, uint16_t source_id,
+size_t LOGGER_FormatTextLine(char *buf, size_t size, uint8_t node_id, uint16_t code, uint16_t source_id,
                               LOGGER_Priority_t priority, int32_t value, uint32_t systick,
                               uint32_t rtc_time, const char *description)
 {
     logger_out_t out = { buf, size, 0U, 1U };
 
-    logger_format_line(&out, code, source_id, priority, value, systick, rtc_time, description, 1U);
+    logger_format_line(&out, node_id, code, source_id, priority, value, systick, rtc_time, description, 1U);
 
     if ((buf != NULL) && (size > 0U))
     {
@@ -567,7 +573,7 @@ static void logger_report_error(logger_err_kind_t kind, uint16_t source_id, uint
 /** @brief Кладёт запись в кольцо. Вызывать ТОЛЬКО под критической секцией и
  *         когда в кольце есть свободное место. Обновляет пик заполнения и
  *         счётчик триггера сброса по приоритету. */
-static void logger_ring_put_locked(uint16_t code, LOGGER_Priority_t priority, uint16_t source_id,
+static void logger_ring_put_locked(uint8_t node_id, uint16_t code, LOGGER_Priority_t priority, uint16_t source_id,
                                     int32_t value, uint32_t systick, uint32_t rtc_time)
 {
     uint16_t index = (uint16_t)(s_buffer_head + s_buffer_count);
@@ -581,6 +587,10 @@ static void logger_ring_put_locked(uint16_t code, LOGGER_Priority_t priority, ui
     s_buffer[index].value     = value;
     s_buffer[index].systick   = systick;
     s_buffer[index].rtc_time  = rtc_time;
+    s_buffer[index].node_id   = node_id;
+    s_buffer[index].reserved[0] = 0U;
+    s_buffer[index].reserved[1] = 0U;
+    s_buffer[index].reserved[2] = 0U;
     s_buffer_count            = (uint16_t)(s_buffer_count + 1U);
 
     if (s_buffer_count > s_high_water)
@@ -613,7 +623,7 @@ static void logger_summary_put_locked(uint32_t systick, uint32_t rtc_time)
     uint32_t lost = s_dropped_unreported;
 
     s_dropped_unreported = 0U;
-    logger_ring_put_locked(LOGGER_INTERNAL_CODE_DROPPED_SUMMARY, LOGGER_PRIORITY_HIGH, 0U,
+    logger_ring_put_locked(LOGGER_NODE_MASTER, LOGGER_INTERNAL_CODE_DROPPED_SUMMARY, LOGGER_PRIORITY_HIGH, 0U,
                             (lost > (uint32_t)INT32_MAX) ? INT32_MAX : (int32_t)lost, systick,
                             rtc_time);
 }
@@ -753,7 +763,7 @@ static void logger_flush_internal(void)
  * @param  value     значение переменной
  * @param  systick   HAL_GetTick() на момент события
  * @param  rtc_time  показание RTC на момент события, либо 0 */
-static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16_t source_id,
+static void logger_buffer_push(uint8_t node_id, uint16_t code, LOGGER_Priority_t priority, uint16_t source_id,
                                 int32_t value, uint32_t systick, uint32_t rtc_time)
 {
     uint32_t wait_start = 0U;
@@ -774,7 +784,7 @@ static void logger_buffer_push(uint16_t code, LOGGER_Priority_t priority, uint16
                 logger_summary_put_locked(systick, rtc_time);
             }
 
-            logger_ring_put_locked(code, priority, source_id, value, systick, rtc_time);
+            logger_ring_put_locked(node_id, code, priority, source_id, value, systick, rtc_time);
 
             need_flush = ((s_max_priority_count >= s_threshold[s_max_priority]) ||
                           (s_buffer_count >= (uint16_t)LOGGER_BUFFER_WATERMARK)) ? 1U : 0U;
@@ -857,13 +867,14 @@ static void logger_freq_stats_bump(logger_freq_stats_t *stats, uint32_t now)
 /** @brief Общая реализация для LOGGER_Log()/LOGGER_Mark()/служебных логов.
  *         persist=0 используется только служебными логами о самой библиотеке
  *         (INIT/FLUSH), которые не должны попадать в буфер.
+ * @param  node_id   0 - запись master; 1..255 - запись пришла от slave
  * @param  code      код лога
  * @param  source_id идентификатор источника события
  * @param  value     значение переменной
  * @param  systick   уже захваченный HAL_GetTick()
  * @param  persist   1 - можно буферизовать; 0 - только вывод */
-static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
-                         uint8_t persist)
+static void logger_emit_node(uint8_t node_id, uint16_t code, uint16_t source_id, int32_t value,
+                              uint32_t systick, uint8_t persist)
 {
     const LOGGER_LogEntry_t *entry             = NULL;
     uint32_t                 user_table_index  = LOGGER_LOG_TABLE_SIZE; /* сентинел "не код пользователя" */
@@ -888,20 +899,20 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
 
     if (s_config.console_fn != NULL)
     {
-        s_config.console_fn(s_config.console_context, code, source_id, priority, value,
+        s_config.console_fn(s_config.console_context, node_id, code, source_id, priority, value,
                              systick, rtc_time, description);
     }
 #ifndef LOGGER_NO_ITM
     else
     {
-        logger_swo_output(code, source_id, priority, value, systick, rtc_time, description);
+        logger_swo_output(node_id, code, source_id, priority, value, systick, rtc_time, description);
     }
 #endif
 
     if ((persist != 0U) && (s_config.text_fn != NULL) && (priority >= s_config.text_min_priority))
     {
         char line[LOGGER_TEXT_LINE_LEN + 1U];
-        (void)LOGGER_FormatTextLine(line, sizeof(line), code, source_id, priority, value,
+        (void)LOGGER_FormatTextLine(line, sizeof(line), node_id, code, source_id, priority, value,
                                      systick, rtc_time, description);
         s_config.text_fn(s_config.text_context, line, (uint32_t)LOGGER_TEXT_LINE_LEN);
     }
@@ -909,12 +920,12 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
     if ((persist != 0U) && s_buffering_active && (entry != NULL) &&
         (priority >= s_config.write_min_priority))
     {
-        logger_buffer_push(entry->code, priority, source_id, value, systick, rtc_time);
+        logger_buffer_push(node_id, entry->code, priority, source_id, value, systick, rtc_time);
     }
 
     /* Статистика "болтливости" кода - для ЛЮБОГО известного кода пользователя,
      * независимо от буферизации (см. LOGGER_GetCodeFrequency() в logger.h). */
-    if (user_table_index < LOGGER_LOG_TABLE_SIZE)
+    if ((node_id == LOGGER_NODE_MASTER) && (user_table_index < LOGGER_LOG_TABLE_SIZE))
     {
         logger_freq_stats_bump(&s_code_stats[user_table_index], systick);
     }
@@ -925,6 +936,18 @@ static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32
          * и описания) - сообщаем об этом отдельной служебной записью. */
         logger_report_error(LOGGER_ERR_UNKNOWN_CODE, code, 1U);
     }
+}
+
+/** @brief Запись самого master (node_id = 0) - обёртка logger_emit_node().
+ * @param  code      код лога
+ * @param  source_id идентификатор источника события
+ * @param  value     значение переменной
+ * @param  systick   уже захваченный HAL_GetTick()
+ * @param  persist   1 - можно буферизовать; 0 - только вывод */
+static void logger_emit(uint16_t code, uint16_t source_id, int32_t value, uint32_t systick,
+                         uint8_t persist)
+{
+    logger_emit_node(LOGGER_NODE_MASTER, code, source_id, value, systick, persist);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -948,13 +971,13 @@ static HAL_StatusTypeDef logger_init_fail(const LOGGER_Config_t *config, int32_t
 
     if ((config != NULL) && (config->console_fn != NULL))
     {
-        config->console_fn(config->console_context, LOGGER_INTERNAL_CODE_INIT_FAIL, entry_code,
+        config->console_fn(config->console_context, LOGGER_NODE_MASTER, LOGGER_INTERNAL_CODE_INIT_FAIL, entry_code,
                             LOGGER_PRIORITY_HIGH, reason, systick, 0U, desc);
     }
 #ifndef LOGGER_NO_ITM
     else
     {
-        logger_swo_output(LOGGER_INTERNAL_CODE_INIT_FAIL, entry_code, LOGGER_PRIORITY_HIGH,
+        logger_swo_output(LOGGER_NODE_MASTER, LOGGER_INTERNAL_CODE_INIT_FAIL, entry_code, LOGGER_PRIORITY_HIGH,
                            reason, systick, 0U, desc);
     }
 #endif
@@ -1271,4 +1294,137 @@ uint32_t LOGGER_GetErrorCount(uint16_t code)
         }
     }
     return count;
+}
+
+/* ------------------------------------------------------------------------ */
+/*  Приём записей от slave                                                  */
+/* ------------------------------------------------------------------------ */
+
+/** Последний принятый seq каждого узла, флаг "узел уже виден", потери по узлам. */
+static uint8_t  s_remote_last_seq[256];
+static uint8_t  s_remote_seen[32];
+static uint16_t s_remote_lost[256];
+
+/** @brief Принимает кадр slave в общий журнал - см. описание в logger.h.
+ * @param  frame кадр */
+void LOGGER_PushRemote(const LOGGER_Frame_t *frame)
+{
+    if ((frame == NULL) || (frame->node_id == LOGGER_NODE_MASTER))
+    {
+        return;
+    }
+
+    uint8_t  n    = frame->node_id;
+    uint8_t  mask = (uint8_t)(1U << (n & 7U));
+    uint8_t  gap  = 0U;
+    uint32_t primask = logger_critical_enter();
+
+    if ((s_remote_seen[n >> 3] & mask) != 0U)
+    {
+        gap = (uint8_t)(frame->seq - s_remote_last_seq[n] - 1U);
+    }
+    s_remote_seen[n >> 3] = (uint8_t)(s_remote_seen[n >> 3] | mask);
+    s_remote_last_seq[n]  = frame->seq;
+    if (gap != 0U)
+    {
+        uint32_t sum = (uint32_t)s_remote_lost[n] + gap;
+        s_remote_lost[n] = (sum > 0xFFFFU) ? 0xFFFFU : (uint16_t)sum;
+    }
+    logger_critical_exit(primask);
+
+    uint32_t systick = HAL_GetTick();
+    if (gap != 0U)
+    {
+        logger_emit_node(n, LOGGER_INTERNAL_CODE_REMOTE_LOST, gap, (int32_t)frame->seq, systick, 1U);
+    }
+    logger_emit_node(n, frame->code, frame->source_id, frame->value, systick, 1U);
+}
+
+/** @brief Обнуляет разборщик потока.
+ * @param  parser разборщик */
+void LOGGER_StreamParserInit(LOGGER_StreamParser_t *parser)
+{
+    if (parser != NULL)
+    {
+        parser->index      = 0U;
+        parser->crc_errors = 0U;
+    }
+}
+
+/** @brief Принимает байты потока и выделяет из него кадры - см. logger.h.
+ * @param  parser разборщик
+ * @param  data   принятые байты
+ * @param  length число байт */
+void LOGGER_StreamFeed(LOGGER_StreamParser_t *parser, const uint8_t *data, uint32_t length)
+{
+    if ((parser == NULL) || (data == NULL))
+    {
+        return;
+    }
+
+    for (uint32_t k = 0U; k < length; k++)
+    {
+        uint8_t b = data[k];
+
+        if (parser->index == 0U)
+        {
+            if (b == (uint8_t)LOGGER_WIRE_SYNC)
+            {
+                parser->buf[0] = b;
+                parser->index  = 1U;
+            }
+            continue;
+        }
+
+        parser->buf[parser->index] = b;
+        parser->index++;
+        if (parser->index < (uint8_t)LOGGER_WIRE_STREAM_SIZE)
+        {
+            continue;
+        }
+
+        uint16_t crc_rx = (uint16_t)((uint16_t)parser->buf[11] | ((uint16_t)parser->buf[12] << 8));
+        if (LOGGER_Crc16(&parser->buf[1], LOGGER_WIRE_RAW_SIZE) == crc_rx)
+        {
+            LOGGER_Frame_t frame;
+            LOGGER_FrameUnpackRaw(&parser->buf[1], &frame);
+            parser->index = 0U;
+            LOGGER_PushRemote(&frame);
+        }
+        else
+        {
+            parser->crc_errors++;
+            /* Пересинхронизация: ищем следующий SYNC внутри уже принятых байт. */
+            uint8_t found = 0U;
+            for (uint8_t i = 1U; i < (uint8_t)LOGGER_WIRE_STREAM_SIZE; i++)
+            {
+                if (parser->buf[i] == (uint8_t)LOGGER_WIRE_SYNC)
+                {
+                    found = i;
+                    break;
+                }
+            }
+            if (found == 0U)
+            {
+                parser->index = 0U;
+            }
+            else
+            {
+                uint8_t rest = (uint8_t)(LOGGER_WIRE_STREAM_SIZE - found);
+                (void)memmove(parser->buf, &parser->buf[found], rest);
+                parser->index = rest;
+            }
+        }
+    }
+}
+
+/** @brief Потери кадров slave на линии - см. logger.h.
+ * @param  node_id id slave
+ * @return число потерянных кадров */
+uint32_t LOGGER_GetRemoteLost(uint8_t node_id)
+{
+    uint32_t primask = logger_critical_enter();
+    uint32_t lost    = (node_id == LOGGER_NODE_MASTER) ? 0U : s_remote_lost[node_id];
+    logger_critical_exit(primask);
+    return lost;
 }

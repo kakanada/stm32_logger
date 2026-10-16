@@ -1,6 +1,6 @@
 # logger - справочник по API
 
-Дисклеймер: при расхождениях с `.h`-файлами (`logger.h` для встраиваемой части, `log_decoder.h` для хостовой) ориентируйтесь на них, они первичны, этот справочник - их сжатый пересказ.
+Дисклеймер: при расхождениях с `logger.h` ориентируйтесь на него, он первичен, этот справочник - его сжатый пересказ. Хостовая часть (разбор дампа на ПК) - в папке `../host`.
 
 ## Оглавление
 
@@ -12,10 +12,8 @@
 - [Операционные функции](#операционные-функции)
 - [Временные метки](#временные-метки)
 - [Статистика частоты обычных кодов](#статистика-частоты-обычных-кодов)
+- [Приём записей от slave](#приём-записей-от-slave)
 
-Хостовая часть (ПК/сервер, `log_decoder.h`/`log_decoder.c`):
-- [Разбор дампа памяти](#разбор-дампа-памяти)
-- [Постфактум-статистика частоты](#постфактум-статистика-частоты)
 
 Интеграция (`logger_codes.h`):
 - [Адресные пространства и интеграция зависимых библиотек](#адресные-пространства-и-интеграция-зависимых-библиотек)
@@ -60,7 +58,7 @@
 
 ### `LOGGER_Record_t`
 
-Формат одной записи в буфере и в данных, переданных в `LOGGER_MemoryWriteFn_t` (16 байт, без выравнивающих "дыр"):
+Формат одной записи в буфере и в данных, переданных в `LOGGER_MemoryWriteFn_t` (20 байт, без выравнивающих "дыр" внутри полей):
 
 | Поле | Тип | Описание |
 |---|---|---|
@@ -69,6 +67,8 @@
 | `value` | `int32_t` | значение переменной, переданное в `LOGGER_Log()` |
 | `systick` | `uint32_t` | `HAL_GetTick()` на момент события, мс с момента старта |
 | `rtc_time` | `uint32_t` | показание RTC на момент события, либо 0 (см. `rtc_time_fn`) |
+| `node_id` | `uint8_t` | 0 - запись самого master; 1..255 - запись пришла от slave с этим id |
+| `reserved` | `uint8_t[3]` | выравнивание, всегда 0 |
 
 ### `LOGGER_MemoryWriteFn_t`
 
@@ -81,7 +81,7 @@ typedef void (*LOGGER_MemoryWriteFn_t)(void *context, const uint8_t *data, uint3
 ### `LOGGER_ConsoleWriteFn_t`
 
 ```c
-typedef void (*LOGGER_ConsoleWriteFn_t)(void *context, uint16_t code, uint16_t source_id,
+typedef void (*LOGGER_ConsoleWriteFn_t)(void *context, uint8_t node_id, uint16_t code, uint16_t source_id,
                                          LOGGER_Priority_t priority, int32_t value,
                                          uint32_t systick, uint32_t rtc_time,
                                          const char *description);
@@ -115,9 +115,9 @@ typedef uint32_t (*LOGGER_RtcTimeFn_t)(void *context);
 
 Пороги учитываются, только если `write_fn != NULL`. Рекомендуется `threshold_high <= threshold_medium <= threshold_low` - логи более высокого приоритета обычно должны попадать в память чаще.
 
-Три приёмника логов: (1) потоковый вывод `console_fn`/SWO; (2) бинарная запись `write_fn`, фильтр `write_min_priority` (LOW - всё, MEDIUM - medium+high, HIGH - только ошибки); (3) читаемый текст `text_fn` (строка фиксированной длины `LOGGER_TEXT_LINE_LEN` = 194 байта, колонки выровнены, пробелы в конце, CRLF) с фильтром `text_min_priority`. Поля `text_context`, `text_fn`, `write_min_priority`, `text_min_priority` при нулевой инициализации означают: текст выключен, в память пишется всё.
+Три приёмника логов: (1) потоковый вывод `console_fn`/SWO; (2) бинарная запись `write_fn`, фильтр `write_min_priority` (LOW - всё, MEDIUM - medium+high, HIGH - только ошибки); (3) читаемый текст `text_fn` (строка фиксированной длины `LOGGER_TEXT_LINE_LEN` = 198 байт, колонки выровнены, пробелы в конце, CRLF) с фильтром `text_min_priority`. Поля `text_context`, `text_fn`, `write_min_priority`, `text_min_priority` при нулевой инициализации означают: текст выключен, в память пишется всё.
 
-### `size_t LOGGER_FormatTextLine(char *buf, size_t size, uint16_t code, uint16_t source_id, LOGGER_Priority_t priority, int32_t value, uint32_t systick, uint32_t rtc_time, const char *description)`
+### `size_t LOGGER_FormatTextLine(char *buf, size_t size, uint8_t node_id, uint16_t code, uint16_t source_id, LOGGER_Priority_t priority, int32_t value, uint32_t systick, uint32_t rtc_time, const char *description)`
 
 Как `LOGGER_FormatConsoleLine`, но строка всегда `LOGGER_TEXT_LINE_LEN` байт (описание добито пробелами до 64 символов, затем до постоянной длины). Буфер не менее `LOGGER_TEXT_LINE_LEN + 1`.
 
@@ -169,11 +169,11 @@ typedef uint32_t (*LOGGER_RtcTimeFn_t)(void *context);
 | 8 | `LOGGER_INIT_FAIL_BAD_THRESHOLD` | порог 0 либо больше `LOGGER_BUFFER_CAPACITY` |
 | 9 | `LOGGER_INIT_FAIL_CONSOLE_REQUIRED` | `LOGGER_NO_ITM` без `console_fn` |
 
-### `size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint16_t code, uint16_t source_id, LOGGER_Priority_t priority, int32_t value, uint32_t systick, uint32_t rtc_time, const char *description)`
+### `size_t LOGGER_FormatConsoleLine(char *buf, size_t size, uint8_t node_id, uint16_t code, uint16_t source_id, LOGGER_Priority_t priority, int32_t value, uint32_t systick, uint32_t rtc_time, const char *description)`
 
 Формирует текстовую строку лога в буфер в том же формате, что вывод по умолчанию в SWO, без `printf`/`snprintf`: формат см. ниже. Аргументы - те же, что получает `console_fn`, поэтому вызывается прямо из неё, и любой приёмник (COM, UART, TCP) выдаёт единый формат. Работает и при `LOGGER_NO_ITM`. Результат всегда завершён `'\0'` (если `size > 0`) и обрезается по `size`; возвращает длину полной строки без `'\0'` (как `snprintf`: значение `>= size` - строка обрезана; `buf == NULL` при `size == 0` - только подсчёт длины).
 
-**Формат строки (с v1.12, колонки фиксированной ширины):** `<RTC,19> <мс,8> <ГРУППА,8> <L|M|H> 0x<код> <src,4> <val,11> <описание>\r\n`, например `2026-10-06 14:03:22    12401 USB_ETH  L 0x4207 13BA -1062729982 TCP-клиент подключился`. RTC - `rtc_time` как **Unix-время (секунды с 1970, без часового пояса)**, переводится в `ГГГГ-ММ-ДД ЧЧ:ММ:СС` самой библиотекой (`LOGGER_UnixTimeToText()`, общая для МК и хоста); `rtc_time == 0` (RTC не используется) - 19 пробелов, чтобы колонки не плыли. Имя группы - ровно 8 заглавных символов из таблицы `LOGGER_GroupNames` в `logger_codes.h` (расширяется через `LOGGER_EXTRA_GROUP_NAMES`): `LOGGER_GetGroupName(code)` (МК) / `LOGDEC_GetGroupName(code)` (хост). Хост: `LOGDEC_FormatLine()` - тот же формат из декодированной записи. Имя группы в память не пишется. Парсеры строк старого вида (`[LOG] ... src= val=`) надо обновить.
+**Формат строки (с v1.12, колонки фиксированной ширины):** `<RTC,19> <мс,8> <узел,3> <ГРУППА,8> <L|M|H> 0x<код> <src,4> <val,11> <описание>\r\n`, например `2026-10-06 14:03:22    12401 USB_ETH  L 0x4207 13BA -1062729982 TCP-клиент подключился`. RTC - `rtc_time` как **Unix-время (секунды с 1970, без часового пояса)**, переводится в `ГГГГ-ММ-ДД ЧЧ:ММ:СС` самой библиотекой (`LOGGER_UnixTimeToText()`, общая для МК и хоста); `rtc_time == 0` (RTC не используется) - 19 пробелов, чтобы колонки не плыли. Имя группы - ровно 8 заглавных символов из таблицы `LOGGER_GroupNames` в `logger_codes.h` (расширяется через `LOGGER_EXTRA_GROUP_NAMES`): `LOGGER_GetGroupName(code)` (МК) / `LOGDEC_GetGroupName(code)` (хост). Хост: `LOGDEC_FormatLine()` - тот же формат из декодированной записи. Имя группы в память не пишется. Парсеры строк старого вида (`[LOG] ... src= val=`) надо обновить.
 
 ---
 
@@ -237,53 +237,41 @@ typedef uint32_t (*LOGGER_RtcTimeFn_t)(void *context);
 
 Возвращает `HAL_OK` - частота посчитана; `HAL_ERROR` - `out_frequency == NULL`, `code` отсутствует в пользовательской таблице, либо код вызывался ещё меньше 2 раз.
 
+
 ---
 
-## Разбор дампа памяти
+## Приём записей от slave
 
-Функции и тип ниже - из `log_decoder.h`, хостовая часть (ПК/сервер). Не зависят от встраиваемой части и не собираются вместе с ней - общий только `logger_codes.h`.
+Master принимает кадры от slave (папка `../device_slave`) и кладёт их в тот же журнал: вывод в консоль/SWO, `text_fn`, бинарный буфер с теми же порогами приоритета. У записи есть `node_id` (0 - сам master, 1..255 - slave). Время записи - момент прихода кадра в master (`HAL_GetTick()` и RTC master): синхронизации времени и обратной связи (подтверждений) нет. Приоритет и описание берутся из таблицы кодов master: в ней должны быть включены группы всех slave (`LOGGER_ENABLE_*`).
 
-### `LOGDEC_DecodedRecord_t`
-
-Результат разбора одной `LOGGER_Record_t` - сырые поля записи плюс уже подставленные приоритет и описание из таблицы кодов.
+### `LOGGER_Frame_t`
 
 | Поле | Тип | Описание |
 |---|---|---|
-| `code` | `uint16_t` | код лога, как в дампе памяти |
-| `source_id` | `uint16_t` | идентификатор источника события |
-| `value` | `int32_t` | значение переменной |
-| `systick` | `uint32_t` | SysTick на момент события |
-| `rtc_time` | `uint32_t` | показание RTC на момент события, либо 0 |
-| `priority` | `LOGGER_Priority_t` | приоритет из таблицы кодов; `LOGGER_PRIORITY_HIGH`, если код не найден |
-| `description` | `const char*` | описание из таблицы кодов; `NULL`, если код не найден ни в одной таблице |
+| `node_id` | `uint8_t` | id slave, 1..255 |
+| `seq` | `uint8_t` | порядковый номер кадра slave по модулю 256 |
+| `code` | `uint16_t` | код лога |
+| `source_id` | `uint16_t` | идентификатор источника |
+| `value` | `int32_t` | значение |
 
-### `bool LOGDEC_Decode(const uint8_t *data, size_t data_length, LOGDEC_DecodedRecord_t *out_records, size_t out_capacity, size_t *out_count)`
+Хелперы раскладки (в `logger_types.h`): `LOGGER_FramePackRaw()` / `LOGGER_FrameUnpackRaw()` - 10 байт (`LOGGER_WIRE_RAW_SIZE`), little-endian; `LOGGER_FramePackStream()` - 13 байт (`LOGGER_WIRE_STREAM_SIZE`): `0xA5` + 10 байт + CRC16-CCITT; `LOGGER_Crc16()`. Для classic CAN рекомендуется: расширенный идентификатор `(node_id << 8) | seq`, данные 8 байт = `code`(2), `source_id`(2), `value`(4).
 
-Разбирает сырой дамп памяти (массив `LOGGER_Record_t` подряд) целиком в предоставленный буфер `out_records`. "Всё или ничего": если `out_capacity` не хватает на все записи дампа - функция возвращает `false` и не пишет в `out_records` частично.
+### `void LOGGER_PushRemote(const LOGGER_Frame_t *frame)`
 
-Возвращает `true` - дамп полностью разобран, `out_records`/`*out_count` (если не `NULL`) заполнены; `false` - `data`/`out_records == NULL`, `data_length` не кратна `sizeof(LOGGER_Record_t)` (повреждённый/обрезанный дамп), либо `out_capacity` не хватает.
+Принимает кадр. Вызывается из любого контекста (в том числе из обработчика приёма CAN/UART). Пропуск номеров `seq` относительно предыдущего кадра этого slave порождает служебную запись `LOGGER_INTERNAL_CODE_REMOTE_LOST` (`0x000C`, `source_id` = сколько кадров пропущено, `value` = `seq` принятого кадра) и учитывается в `LOGGER_GetRemoteLost()`. Первый кадр узла после старта master проверкой не охватывается; перезапуск slave выглядит как пропуск. Кадр с `node_id == 0` игнорируется.
 
-### `const char *LOGDEC_GetDescription(uint16_t code)`
+### `LOGGER_StreamParser_t`, `LOGGER_StreamParserInit()`, `LOGGER_StreamFeed()`
 
-Точечный поиск текстового описания по коду - из пользовательской таблицы (`logger_codes.h`) либо, для диапазона `0x0000-0x00FF`, из служебной таблицы библиотеки. Возвращает `NULL`, если код не найден ни в одной из таблиц.
+```c
+void LOGGER_StreamParserInit(LOGGER_StreamParser_t *parser);
+void LOGGER_StreamFeed(LOGGER_StreamParser_t *parser, const uint8_t *data, uint32_t length);
+```
 
-### `bool LOGDEC_GetPriority(uint16_t code, LOGGER_Priority_t *out_priority)`
+Разборщик потока байт (UART/SPI): ищет `0xA5`, собирает 13 байт, проверяет CRC16 и передаёт верный кадр в `LOGGER_PushRemote()`. При ошибке CRC пересинхронизируется по следующему `0xA5` внутри принятых байт; число отброшенных кадров - `parser->crc_errors`. Состояние (`LOGGER_StreamParser_t`) создаёт пользователь, по одному на входной поток.
 
-Точечный поиск приоритета по коду, из тех же таблиц, что и `LOGDEC_GetDescription()`. Возвращает `true` и заполняет `*out_priority`, если код найден; `false` - если `out_priority == NULL` либо код не найден ни в одной таблице.
+### `uint32_t LOGGER_GetRemoteLost(uint8_t node_id)`
 
----
-
-## Постфактум-статистика частоты
-
-Хостовый аналог `LOGGER_GetCodeFrequency()`/`LOGGER_GetMarkFrequency()` - считается сразу по всему массиву записей, разобранному `LOGDEC_Decode()`, а не в реальном времени. Обе функции, как и `LOGDEC_Decode()`, "всё или ничего": если `out_capacity` не хватает на все различные коды/метки - возвращают `false` и не пишут в `out_stats`.
-
-### `bool LOGDEC_ComputeCodeStats(const LOGDEC_DecodedRecord_t *records, size_t record_count, LOGDEC_CodeStats_t *out_stats, size_t out_capacity, size_t *out_count)`
-
-Статистика по каждому отдельному коду в `records` (кроме `LOGGER_INTERNAL_CODE_MARK` - см. `LOGDEC_ComputeMarkStats()`). `LOGDEC_CodeStats_t`: `code`, `call_count`, `first_systick`, `last_systick`, `frequency_hz` (0.0f, если данных недостаточно).
-
-### `bool LOGDEC_ComputeMarkStats(const LOGDEC_DecodedRecord_t *records, size_t record_count, LOGDEC_MarkStats_t *out_stats, size_t out_capacity, size_t *out_count)`
-
-Статистика по каждой отдельной метке (`LOGGER_Mark(mark_id)`) - находит записи с кодом `LOGGER_INTERNAL_CODE_MARK` и агрегирует их по `source_id` (= `mark_id`). `LOGDEC_MarkStats_t`: `mark_id`, `call_count`, `first_systick`, `last_systick`, `frequency_hz`.
+Сколько кадров этого slave потеряно на линии (по пропускам `seq`) с момента старта, насыщается на 65535. Для `node_id == 0` возвращает 0. ОЗУ под учёт потерь: около 800 байт на 255 узлов.
 
 ---
 

@@ -5,7 +5,7 @@
  *          библиотеки - общая часть встраиваемой и хостовой сторон.
  * @author  Mechanic
  * @date    04.10.2026
- * @version 1.18
+ * @version 2.0
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -76,9 +76,99 @@ typedef struct
     uint16_t code;      /**< код лога (как в LOGGER_LogTable) */
     uint16_t source_id;  /**< идентификатор источника события, из LOGGER_Log() */
     int32_t  value;      /**< значение переменной, переданное в LOGGER_Log() */
-    uint32_t systick;    /**< HAL_GetTick() на момент события, мс с момента старта */
+    uint32_t systick;    /**< HAL_GetTick() мастера на момент события (для записи от slave - момент прихода кадра), мс с момента старта */
     uint32_t rtc_time;   /**< показание RTC на момент события, либо 0 (см. rtc_time_fn) */
+    uint8_t  node_id;    /**< 0 - запись самого master; 1..255 - запись пришла от slave с этим id */
+    uint8_t  reserved[3]; /**< выравнивание до 20 байт, всегда 0 */
 } LOGGER_Record_t;
+
+/* ------------------------------------------------------------------------ */
+/*  Кадр записи на линии между slave и master (интерфейс-независимый)        */
+/* ------------------------------------------------------------------------ */
+
+/** Id узла: 0 - master (собственные записи), 1..255 - slave. */
+#define LOGGER_NODE_MASTER 0U
+
+/** Логическая запись slave -> master. Слейв заполняет её сам и отдаёт в send_fn;
+ *  как её положить в физический интерфейс (CAN-кадр, UART-поток, SPI), решает
+ *  пользователь - библиотеке интерфейс неизвестен. seq - счётчик записей slave
+ *  по модулю 256: по пропуску номеров master считает потери кадров на линии. */
+typedef struct
+{
+    uint8_t  node_id;    /**< id slave, 1..255 */
+    uint8_t  seq;        /**< порядковый номер кадра slave, 0..255 по кругу */
+    uint16_t code;       /**< код лога */
+    uint16_t source_id;  /**< идентификатор источника события */
+    int32_t  value;      /**< значение переменной */
+} LOGGER_Frame_t;
+
+/** Размер "сырого" кадра (LOGGER_FramePackRaw): node, seq, code(2), source_id(2), value(4), little-endian. */
+#define LOGGER_WIRE_RAW_SIZE    10U
+/** Размер потокового кадра (LOGGER_FramePackStream) для UART/SPI: 0xA5 + сырой кадр + CRC16-CCITT (little-endian). */
+#define LOGGER_WIRE_STREAM_SIZE 13U
+#define LOGGER_WIRE_SYNC        0xA5U
+
+/** @brief CRC16-CCITT (поли 0x1021, начальное 0xFFFF).
+ * @param  data  данные
+ * @param  length длина в байтах
+ * @return CRC16 */
+static inline uint16_t LOGGER_Crc16(const uint8_t *data, uint32_t length)
+{
+    uint16_t crc = 0xFFFFU;
+
+    for (uint32_t i = 0U; i < length; i++)
+    {
+        crc = (uint16_t)(crc ^ ((uint16_t)data[i] << 8));
+        for (uint8_t b = 0U; b < 8U; b++)
+        {
+            crc = ((crc & 0x8000U) != 0U) ? (uint16_t)((crc << 1) ^ 0x1021U) : (uint16_t)(crc << 1);
+        }
+    }
+    return crc;
+}
+
+/** @brief Упаковывает кадр в LOGGER_WIRE_RAW_SIZE байт (little-endian).
+ * @param  f   кадр
+ * @param  out буфер минимум LOGGER_WIRE_RAW_SIZE байт */
+static inline void LOGGER_FramePackRaw(const LOGGER_Frame_t *f, uint8_t out[LOGGER_WIRE_RAW_SIZE])
+{
+    uint32_t v = (uint32_t)f->value;
+
+    out[0] = f->node_id;
+    out[1] = f->seq;
+    out[2] = (uint8_t)(f->code & 0xFFU);
+    out[3] = (uint8_t)(f->code >> 8);
+    out[4] = (uint8_t)(f->source_id & 0xFFU);
+    out[5] = (uint8_t)(f->source_id >> 8);
+    out[6] = (uint8_t)(v & 0xFFU);
+    out[7] = (uint8_t)((v >> 8) & 0xFFU);
+    out[8] = (uint8_t)((v >> 16) & 0xFFU);
+    out[9] = (uint8_t)(v >> 24);
+}
+
+/** @brief Разбирает LOGGER_WIRE_RAW_SIZE байт в кадр.
+ * @param  in  байты кадра
+ * @param  f   результат */
+static inline void LOGGER_FrameUnpackRaw(const uint8_t in[LOGGER_WIRE_RAW_SIZE], LOGGER_Frame_t *f)
+{
+    f->node_id   = in[0];
+    f->seq       = in[1];
+    f->code      = (uint16_t)((uint16_t)in[2] | ((uint16_t)in[3] << 8));
+    f->source_id = (uint16_t)((uint16_t)in[4] | ((uint16_t)in[5] << 8));
+    f->value     = (int32_t)((uint32_t)in[6] | ((uint32_t)in[7] << 8) | ((uint32_t)in[8] << 16) | ((uint32_t)in[9] << 24));
+}
+
+/** @brief Упаковывает кадр в потоковый вид: LOGGER_WIRE_SYNC + сырой кадр + CRC16.
+ * @param  f   кадр
+ * @param  out буфер минимум LOGGER_WIRE_STREAM_SIZE байт */
+static inline void LOGGER_FramePackStream(const LOGGER_Frame_t *f, uint8_t out[LOGGER_WIRE_STREAM_SIZE])
+{
+    out[0] = (uint8_t)LOGGER_WIRE_SYNC;
+    LOGGER_FramePackRaw(f, &out[1]);
+    uint16_t crc = LOGGER_Crc16(&out[1], LOGGER_WIRE_RAW_SIZE);
+    out[11] = (uint8_t)(crc & 0xFFU);
+    out[12] = (uint8_t)(crc >> 8);
+}
 
 /* ------------------------------------------------------------------------ */
 /*  Текстовое представление rtc_time (Unix-время, секунды с 1970, UTC без   */
@@ -157,6 +247,7 @@ static inline void LOGGER_UnixTimeToText(uint32_t unix_time, char out[LOGGER_RTC
 #define LOGGER_INTERNAL_CODE_MARK_ID_RANGE    0x0009U /**< LOGGER_Mark() с mark_id >= LOGGER_MARK_MAX_IDS (метка записана, статистика нет): source_id = mark_id, value = номер срабатывания */
 #define LOGGER_INTERNAL_CODE_NOT_INIT         0x000AU /**< вызов API до LOGGER_Init() либо без write_fn: source_id = LOGGER_NOT_INIT_API_*, value = номер срабатывания */
 #define LOGGER_INTERNAL_CODE_DROPPED_SUMMARY  0x000BU /**< сохраняется в память, когда после потерь снова появилось место: value = сколько записей потеряно с прошлой такой записи */
+#define LOGGER_INTERNAL_CODE_REMOTE_LOST      0x000CU /**< master: между кадрами slave пропущены номера seq (потеряно на линии): узел = node_id slave, source_id = сколько кадров пропущено, value = seq принятого кадра */
 
 /** Какой API вызван в неподходящем состоянии - source_id служебного лога
  *  LOGGER_INTERNAL_CODE_NOT_INIT. */
@@ -196,6 +287,7 @@ static const LOGGER_LogEntry_t LOGGER_InternalTable[] =
     { LOGGER_INTERNAL_CODE_MARK_ID_RANGE,   LOGGER_PRIORITY_MEDIUM, "mark_id вне диапазона (src=mark_id)" },
     { LOGGER_INTERNAL_CODE_NOT_INIT,        LOGGER_PRIORITY_MEDIUM, "вызов до Init либо без write_fn (src=API)" },
     { LOGGER_INTERNAL_CODE_DROPPED_SUMMARY, LOGGER_PRIORITY_HIGH,   "потеряно записей с прошлой сводки" },
+    { LOGGER_INTERNAL_CODE_REMOTE_LOST,     LOGGER_PRIORITY_HIGH,   "потеряно кадров slave (src=сколько)" },
 };
 
 /** Количество записей в LOGGER_InternalTable. */

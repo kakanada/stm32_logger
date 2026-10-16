@@ -6,7 +6,7 @@
  *          API_REFERENCE.md.
  * @author  Mechanic
  * @date    19.09.2026
- * @version 1.18
+ * @version 2.0
  *
  * @copyright Copyright (c) 2026 Mechanic.
  *            Свободное некоммерческое использование и модификация. Условия
@@ -36,6 +36,7 @@ typedef struct
     int32_t  value;       /**< значение переменной */
     uint32_t systick;     /**< SysTick (HAL_GetTick() на встраиваемой стороне) на момент события */
     uint32_t rtc_time;    /**< показание RTC на момент события, либо 0 */
+    uint8_t  node_id;     /**< 0 - запись самого master; 1..255 - запись пришла от slave с этим id */
 
     /** Приоритет из таблицы кодов. Если code не найден ни в пользовательской,
      *  ни в служебной таблице - LOGGER_PRIORITY_HIGH (та же трактовка "по
